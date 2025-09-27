@@ -104,7 +104,8 @@ class DoubaoClient:
             for chunk in response:
                 if chunk.choices and len(chunk.choices) > 0:
                     delta = chunk.choices[0].delta
-                    if hasattr(delta, 'content') and delta.content is not None:
+                    if hasattr(delta, 'content') and delta.content is not None and delta.content:
+                        # 只返回非空内容，过滤掉空字符串
                         yield delta.content
                         
         except Exception as e:
