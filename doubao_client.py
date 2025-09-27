@@ -71,12 +71,16 @@ class DoubaoClient:
         """获取对话轮数（不包含系统消息）"""
         return len([msg for msg in self.conversation_history if msg["role"] != "system"])
     
-    def chat(self, message):
+    def chat(self, message, thinking_mode="auto"):
         """
         发送聊天消息并获取回复（非流式，支持上下文对话）
         
         Args:
             message (str): 用户输入的消息
+            thinking_mode (str): 深度思考模式，可选值：
+                - "auto": 模型自行判断是否使用深度思考能力（默认）
+                - "enabled": 强制使用深度思考能力
+                - "disabled": 不使用深度思考能力
             
         Returns:
             dict: 包含回复内容和深度思考的字典，失败则返回None
@@ -84,6 +88,7 @@ class DoubaoClient:
                 'content': str,           # 回复内容
                 'reasoning': str or None, # 深度思考内容（如果有）
                 'is_reasoning': bool      # 是否触发了深度思考
+                'thinking_mode': str      # 使用的思考模式
             }
         """
         try:
@@ -96,6 +101,7 @@ class DoubaoClient:
                 max_tokens=MAX_TOKENS,
                 temperature=TEMPERATURE,
                 top_p=TOP_P,
+                thinking={"type": thinking_mode},  # 控制深度思考模式
                 # 启用推理会话应用层加密（可选）
                 extra_headers={'x-is-encrypted': 'true'}
             )
@@ -118,7 +124,8 @@ class DoubaoClient:
                 return {
                     'content': content,
                     'reasoning': reasoning_content,
-                    'is_reasoning': is_reasoning
+                    'is_reasoning': is_reasoning,
+                    'thinking_mode': thinking_mode
                 }
             else:
                 print("API响应格式异常：未找到choices")
@@ -131,19 +138,24 @@ class DoubaoClient:
             print(f"详细错误信息: {traceback.format_exc()}")
             return None
     
-    def chat_stream(self, message):
+    def chat_stream(self, message, thinking_mode="auto"):
         """
         发送聊天消息并获取流式回复（逐字显示，支持上下文对话）
         
         Args:
             message (str): 用户输入的消息
+            thinking_mode (str): 深度思考模式，可选值：
+                - "auto": 模型自行判断是否使用深度思考能力（默认）
+                - "enabled": 强制使用深度思考能力
+                - "disabled": 不使用深度思考能力
             
         Yields:
             dict: 包含内容片段和元信息的字典
             {
                 'content': str,           # 内容片段
                 'reasoning': str or None, # 深度思考片段（如果有）
-                'type': str              # 'content' 或 'reasoning'
+                'type': str,             # 'content' 或 'reasoning'
+                'thinking_mode': str     # 使用的思考模式
             }
         """
         try:
@@ -157,6 +169,7 @@ class DoubaoClient:
                 temperature=TEMPERATURE,
                 top_p=TOP_P,
                 stream=True,  # 启用流式输出
+                thinking={"type": thinking_mode},  # 控制深度思考模式
                 # 启用推理会话应用层加密（可选）
                 extra_headers={'x-is-encrypted': 'true'}
             )
@@ -176,7 +189,8 @@ class DoubaoClient:
                         yield {
                             'content': delta.content,
                             'reasoning': None,
-                            'type': 'content'
+                            'type': 'content',
+                            'thinking_mode': thinking_mode
                         }
                     
                     # 处理深度思考内容（如果有）
@@ -185,7 +199,8 @@ class DoubaoClient:
                         yield {
                             'content': None,
                             'reasoning': delta.reasoning_content,
-                            'type': 'reasoning'
+                            'type': 'reasoning',
+                            'thinking_mode': thinking_mode
                         }
             
             # 流式输出完成后，将完整回复添加到历史

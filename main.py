@@ -45,14 +45,17 @@ def waiting_animation(stop_event):
 
 def main():
     """主函数"""
-    print("=" * 60)
-    print("🤖 豆包AI聊天程序 (支持上下文对话)")
-    print("=" * 60)
+    print("=" * 70)
+    print("🤖 豆包AI聊天程序 (支持上下文对话 + 深度思考控制)")
+    print("=" * 70)
     print("💡 输入消息开始聊天")
     print("💡 输入 'exit' 或 'quit' 退出程序")
     print("💡 输入 'clear' 清空对话历史")
-    print("💡 支持深度思考功能，自动检测并显示思维链")
-    print("=" * 60)
+    print("💡 深度思考控制：")
+    print("   - 默认：自动判断是否需要深度思考")
+    print("   - #think 开头：强制启用深度思考")
+    print("   - #fast 开头：禁用深度思考，快速回复")
+    print("=" * 70)
     
     try:
         # 初始化豆包客户端
@@ -87,6 +90,25 @@ def main():
                 print("⚠️  请输入有效的消息")
                 continue
             
+            # 解析深度思考控制符号
+            thinking_mode = "auto"  # 默认自动判断
+            actual_message = user_input  # 实际发送的消息
+            thinking_status = ""  # 显示给用户的状态
+            
+            if user_input.startswith("#think "):
+                thinking_mode = "enabled"
+                actual_message = user_input[7:]  # 去掉 "#think " 前缀
+                thinking_status = " [强制深度思考]"
+            elif user_input.startswith("#fast "):
+                thinking_mode = "disabled"
+                actual_message = user_input[6:]  # 去掉 "#fast " 前缀
+                thinking_status = " [快速回复]"
+            
+            # 检查处理后的消息是否为空
+            if not actual_message.strip():
+                print("⚠️  请在控制符号后输入有效的消息")
+                continue
+            
             # 发送消息并获取流式回复
             # 确保在新行开始显示动画，避免与用户输入重合
             print()  # 换行，将动画显示在新行
@@ -109,7 +131,7 @@ def main():
                 reasoning_displayed = False  # 是否已显示过深度思考
                 content_started = False      # 是否已开始显示正式回复
                 
-                for chunk_data in client.chat_stream(user_input):
+                for chunk_data in client.chat_stream(actual_message, thinking_mode):
                     # 超时保护
                     if time.time() - start_time > timeout:
                         stop_animation.set()
@@ -130,7 +152,7 @@ def main():
                                 stop_animation.set()
                                 time.sleep(0.15)
                                 first_chunk_received = True
-                            print("\n💭 深度思考中...")
+                            print(f"\n💭 深度思考中...{thinking_status}")
                             print("-" * 50)
                             reasoning_displayed = True
                         print(chunk_data['reasoning'], end="", flush=True)
@@ -143,7 +165,7 @@ def main():
                             if reasoning_displayed:
                                 # 如果之前显示过深度思考，现在开始显示回复
                                 print("\n" + "-" * 50)
-                                print("🤖 豆包: ", end="", flush=True)
+                                print(f"🤖 豆包{thinking_status}: ", end="", flush=True)
                             elif not first_chunk_received:
                                 # 如果没有深度思考，直接开始显示回复（动画会自动清除前缀）
                                 stop_animation.set()  # 停止动画
@@ -188,16 +210,16 @@ def main():
                 print("💡 尝试使用非流式模式...")
                 
                 # 回退到非流式模式
-                print("🤖 豆包: ", end="", flush=True)
-                response_data = client.chat(user_input)
+                print(f"🤖 豆包{thinking_status}: ", end="", flush=True)
+                response_data = client.chat(actual_message, thinking_mode)
                 if response_data and response_data.get('content'):
                     # 先显示深度思考（如果有）
                     if response_data.get('is_reasoning') and response_data.get('reasoning'):
-                        print("\n💭 深度思考内容:")
+                        print(f"\n💭 深度思考内容{thinking_status}:")
                         print("-" * 50)
                         print(response_data['reasoning'])
                         print("-" * 50)
-                        print("🤖 豆包: ", end="")
+                        print(f"🤖 豆包{thinking_status}: ", end="")
                     
                     print(response_data['content'])
                 else:
