@@ -35,7 +35,7 @@ class DoubaoClient:
     
     def chat(self, message):
         """
-        发送聊天消息并获取回复
+        发送聊天消息并获取回复（非流式）
         
         Args:
             message (str): 用户输入的消息
@@ -72,3 +72,44 @@ class DoubaoClient:
             import traceback
             print(f"详细错误信息: {traceback.format_exc()}")
             return None
+    
+    def chat_stream(self, message):
+        """
+        发送聊天消息并获取流式回复（逐字显示）
+        
+        Args:
+            message (str): 用户输入的消息
+            
+        Yields:
+            str: AI的回复内容片段
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.endpoint_id,
+                messages=[
+                    {
+                        "role": "user", 
+                        "content": message
+                    }
+                ],
+                max_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE,
+                top_p=TOP_P,
+                stream=True,  # 启用流式输出
+                # 启用推理会话应用层加密（可选）
+                extra_headers={'x-is-encrypted': 'true'}
+            )
+            
+            # 处理流式响应
+            for chunk in response:
+                if chunk.choices and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    if hasattr(delta, 'content') and delta.content is not None:
+                        yield delta.content
+                        
+        except Exception as e:
+            print(f"流式聊天请求失败: {e}")
+            # 打印更详细的错误信息用于调试
+            import traceback
+            print(f"详细错误信息: {traceback.format_exc()}")
+            yield None
