@@ -30,9 +30,9 @@ def waiting_animation(stop_event):
         if msg_counter > 0 and msg_counter % 30 == 0:
             msg_idx = (msg_idx + 1) % len(messages)
         
-        # 简单地显示动画，让系统按默认规则处理光标
+        # 显示动画，每次都清除可能的残留文字
         current_msg = f'🤖 豆包: {spinners[idx]} {messages[msg_idx]}'
-        print(f'\r{current_msg}', end='', flush=True)
+        print(f'\r{current_msg}' + ' ' * 20, end='', flush=True)  # 在消息后添加空格清除残留
         
         idx = (idx + 1) % len(spinners)
         msg_counter += 1
@@ -49,11 +49,7 @@ def main():
     print("🤖 豆包AI聊天程序")
     print("=" * 50)
     print("💡 输入消息开始聊天，输入 'exit' 或 'quit' 退出程序")
-    print("💡 输入 'debug' 切换调试模式")
     print("=" * 50)
-    
-    # 调试模式标志
-    debug_mode = False
     
     try:
         # 初始化豆包客户端
@@ -69,13 +65,6 @@ def main():
             if user_input.lower() in ['exit', 'quit', '退出', '再见']:
                 print("👋 感谢使用豆包AI聊天程序，再见！")
                 break
-            
-            # 检查调试模式切换
-            if user_input.lower() == 'debug':
-                debug_mode = not debug_mode
-                status = "开启" if debug_mode else "关闭"
-                print(f"🔧 调试模式已{status}")
-                continue
             
             # 检查空输入
             if not user_input:
@@ -101,17 +90,7 @@ def main():
             first_chunk_received = False
             
             try:
-                # 添加一个计数器来跟踪接收到的chunk
-                chunk_count = 0
-                if debug_mode:
-                    print(f"\n🔧 [调试] 开始接收流式数据...")
-                
                 for chunk in client.chat_stream(user_input):
-                    chunk_count += 1
-                    
-                    if debug_mode:
-                        print(f"\n🔧 [调试] 收到第{chunk_count}个chunk: '{chunk}' (长度:{len(chunk) if chunk else 0})")
-                    
                     # 超时保护
                     if time.time() - start_time > timeout:
                         stop_animation.set()
@@ -124,8 +103,6 @@ def main():
                     if chunk is not None and chunk:  # chunk不为None且不为空字符串
                         # 只有在收到真正的内容时才停止动画
                         if not first_chunk_received:
-                            if debug_mode:
-                                print(f"\n🔧 [调试] 停止动画，开始显示内容")
                             stop_animation.set()  # 停止动画
                             time.sleep(0.15)  # 给动画线程时间完成清除操作
                             first_chunk_received = True
@@ -140,8 +117,6 @@ def main():
                     # 完全清除动画文字
                     print('\r' + ' ' * 80, end='')
                     print('\r', end='', flush=True)
-                    if debug_mode:
-                        print(f"🔧 [调试] 没有收到任何有效内容，总共处理了{chunk_count}个chunk")
                 
                 # 换行准备下一轮对话
                 if first_chunk_received:  # 只有收到内容时才换行
@@ -150,8 +125,6 @@ def main():
                 # 检查是否有完整回复
                 if not response_chunks:
                     print("❌ 获取回复失败，请检查网络连接和API配置")
-                elif debug_mode:
-                    print(f"\n🔧 [调试] 成功接收{len(response_chunks)}个有效chunk，总计{chunk_count}个chunk")
                     
             except Exception as e:
                 # 停止动画
