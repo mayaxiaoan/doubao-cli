@@ -7,7 +7,39 @@
 import threading
 import time
 import sys
+import os
+import locale
 from doubao_client import DoubaoClient
+
+
+def setup_encoding():
+    """设置编码环境，解决Linux下的UTF-8问题"""
+    try:
+        # 设置Python默认编码
+        if hasattr(sys, 'setdefaultencoding'):
+            sys.setdefaultencoding('utf-8')
+        
+        # 强制设置stdout和stderr的编码
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        
+        # 设置locale
+        try:
+            locale.setlocale(locale.LC_ALL, 'C.UTF-8')
+        except locale.Error:
+            try:
+                locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+            except locale.Error:
+                pass  # 忽略locale设置失败
+        
+        # 设置环境变量
+        os.environ['PYTHONIOENCODING'] = 'utf-8'
+        
+        return True
+    except Exception as e:
+        print(f"⚠️ 编码环境设置警告: {e}")
+        return False
 
 
 def waiting_animation(stop_event):
@@ -43,24 +75,61 @@ def waiting_animation(stop_event):
     print('\r🤖 豆包: ', end='', flush=True)
 
 
+def safe_input(prompt):
+    """安全的输入函数，处理编码问题"""
+    try:
+        user_input = input(prompt)
+        # 确保输入是UTF-8编码的字符串
+        if isinstance(user_input, bytes):
+            user_input = user_input.decode('utf-8', errors='replace')
+        elif isinstance(user_input, str):
+            # 重新编码确保没有问题
+            user_input = user_input.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+        return user_input.strip()
+    except UnicodeDecodeError as e:
+        print(f"⚠️ 输入编码错误: {e}")
+        return ""
+    except Exception as e:
+        print(f"⚠️ 输入处理错误: {e}")
+        return ""
+
+
+def safe_print(text, end='\n', flush=False):
+    """安全的打印函数，处理编码问题"""
+    try:
+        if isinstance(text, bytes):
+            text = text.decode('utf-8', errors='replace')
+        print(text, end=end, flush=flush)
+    except UnicodeEncodeError as e:
+        # 如果仍有编码问题，使用ASCII模式
+        safe_text = text.encode('ascii', errors='replace').decode('ascii')
+        print(safe_text, end=end, flush=flush)
+        print(f"⚠️ 字符编码问题已处理: {e}")
+    except Exception as e:
+        print(f"输出错误: {e}", end=end, flush=flush)
+
+
 def main():
     """主函数"""
-    print("=" * 70)
-    print("🤖 豆包AI聊天程序 (支持上下文对话 + 深度思考控制)")
-    print("=" * 70)
-    print("💡 输入消息开始聊天")
-    print("💡 输入 'exit' 或 'quit' 退出程序")
-    print("💡 输入 'clear' 清空对话历史")
-    print("💡 深度思考控制：")
-    print("   - 默认：自动判断是否需要深度思考")
-    print("   - #think 开头：强制启用深度思考")
-    print("   - #fast 开头：禁用深度思考，快速回复")
-    print("=" * 70)
+    # 首先设置编码环境
+    encoding_ok = setup_encoding()
+    
+    safe_print("=" * 70)
+    safe_print("🤖 豆包AI聊天程序 (支持上下文对话 + 深度思考控制)")
+    safe_print("=" * 70)
+    safe_print("💡 输入消息开始聊天")
+    safe_print("💡 输入 'exit' 或 'quit' 退出程序")
+    safe_print("💡 输入 'clear' 清空对话历史")
+    safe_print("💡 深度思考控制：")
+    safe_print("   - 默认：自动判断是否需要深度思考")
+    safe_print("   - #think 开头：强制启用深度思考")
+    safe_print("   - #fast 开头：禁用深度思考，快速回复")
+    safe_print("=" * 70)
     
     try:
         # 初始化豆包客户端
         client = DoubaoClient()
-        print("✅ 豆包AI客户端初始化成功")
+        safe_print("✅ 豆包AI客户端初始化成功")
         
         # 开始聊天循环
         while True:
@@ -71,8 +140,8 @@ def main():
             else:
                 status = " (新对话)"
             
-            # 获取用户输入
-            user_input = input(f"\n👤 您{status}: ").strip()
+            # 获取用户输入（使用安全输入函数）
+            user_input = safe_input(f"\n👤 您{status}: ")
             
             # 检查退出命令
             if user_input.lower() in ['exit', 'quit', '退出', '再见']:
@@ -155,7 +224,7 @@ def main():
                             print(f"\n💭 深度思考中...{thinking_status}")
                             print("-" * 50)
                             reasoning_displayed = True
-                        print(chunk_data['reasoning'], end="", flush=True)
+                        safe_print(chunk_data['reasoning'], end="", flush=True)
                         response_chunks.append(chunk_data['reasoning'])
                     
                     # 处理普通回复内容
@@ -179,7 +248,7 @@ def main():
                             time.sleep(0.15)  # 给动画线程时间完成清除操作
                             first_chunk_received = True
                         
-                        print(chunk_data['content'], end="", flush=True)
+                        safe_print(chunk_data['content'], end="", flush=True)
                         response_chunks.append(chunk_data['content'])
                 
                 # 确保动画已停止

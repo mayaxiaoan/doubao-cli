@@ -5,8 +5,29 @@
 """
 
 import os
+import sys
 from volcenginesdkarkruntime import Ark
 from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P
+
+
+def safe_decode_response(content):
+    """安全解码API响应内容"""
+    if content is None:
+        return None
+    
+    try:
+        # 如果是bytes，进行解码
+        if isinstance(content, bytes):
+            return content.decode('utf-8', errors='replace')
+        # 如果是字符串，确保编码正确
+        elif isinstance(content, str):
+            # 重新编码确保没有问题
+            return content.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+        else:
+            return str(content)
+    except Exception as e:
+        print(f"⚠️ 响应内容编码处理错误: {e}")
+        return str(content) if content else ""
 
 
 class DoubaoClient:
@@ -109,13 +130,13 @@ class DoubaoClient:
             # 提取AI回复内容
             if response.choices and len(response.choices) > 0:
                 message_obj = response.choices[0].message
-                content = message_obj.content
+                content = safe_decode_response(message_obj.content)
                 
                 # 检查是否有深度思考内容
                 reasoning_content = None
                 is_reasoning = False
                 if hasattr(message_obj, 'reasoning_content') and message_obj.reasoning_content:
-                    reasoning_content = message_obj.reasoning_content
+                    reasoning_content = safe_decode_response(message_obj.reasoning_content)
                     is_reasoning = True
                 
                 # 添加助手回复到历史
@@ -185,9 +206,10 @@ class DoubaoClient:
                     
                     # 处理普通回复内容
                     if hasattr(delta, 'content') and delta.content is not None and delta.content:
-                        full_content += delta.content
+                        safe_content = safe_decode_response(delta.content)
+                        full_content += safe_content
                         yield {
-                            'content': delta.content,
+                            'content': safe_content,
                             'reasoning': None,
                             'type': 'content',
                             'thinking_mode': thinking_mode
@@ -195,10 +217,11 @@ class DoubaoClient:
                     
                     # 处理深度思考内容（如果有）
                     if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None and delta.reasoning_content:
-                        full_reasoning += delta.reasoning_content
+                        safe_reasoning = safe_decode_response(delta.reasoning_content)
+                        full_reasoning += safe_reasoning
                         yield {
                             'content': None,
-                            'reasoning': delta.reasoning_content,
+                            'reasoning': safe_reasoning,
                             'type': 'reasoning',
                             'thinking_mode': thinking_mode
                         }
