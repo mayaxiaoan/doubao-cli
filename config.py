@@ -114,16 +114,16 @@ COLORS = {
     'italic': '\033[3m',          # 斜体
     'underline': '\033[4m',       # 下划线
     
-    # 聊天内容颜色方案
+    # 聊天内容颜色方案 - 适配fbterm的8色限制
     'user_text': '\033[36m',      # 青色 - 用户输入
-    'bot_text': '\033[92m',       # 亮绿色 - 豆包回复
-    'bot_thinking': '\033[95m',   # 亮洋红色 - 豆包思考
-    'system_info': '\033[94m',    # 亮蓝色 - 系统信息
+    'bot_text': '\033[37m',       # 白色 - 豆包回复（按用户要求）
+    'bot_thinking': '\033[33m',   # 黄色/棕色 - 豆包思考
+    'system_info': '\033[34m',    # 蓝色 - 系统信息
     'system_success': '\033[32m', # 绿色 - 成功消息
-    'system_warning': '\033[93m', # 亮黄色 - 警告
-    'system_error': '\033[91m',   # 亮红色 - 错误
-    'separator_line': '\033[90m', # 灰色 - 分隔线
-    'cat_art': '\033[35m',        # 洋红色 - ASCII艺术猫
+    'system_warning': '\033[33m', # 黄色/棕色 - 警告
+    'system_error': '\033[31m',   # 红色 - 错误
+    'separator_line': '\033[36m', # 青色 - 分隔线
+    'cat_art': '\033[37m',        # 白色 - ASCII艺术猫（按用户要求）
 }
 
 # 是否启用颜色 (可以通过这个开关控制)
