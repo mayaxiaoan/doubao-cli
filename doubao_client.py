@@ -7,7 +7,7 @@
 import os
 import sys
 from volcenginesdkarkruntime import Ark
-from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P
+from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P, SYMBOLS
 
 
 def safe_decode_response(content):
@@ -26,7 +26,7 @@ def safe_decode_response(content):
         else:
             return str(content)
     except Exception as e:
-        print(f"⚠️ 响应内容编码处理错误: {e}")
+        print(f"{SYMBOLS['warning']} 响应内容编码处理错误: {e}")
         return str(content) if content else ""
 
 
@@ -50,7 +50,7 @@ class DoubaoClient:
                 base_url=API_BASE_URL,
                 api_key=self.api_key,
             )
-            print(f"✅ 使用接入点: {self.endpoint_id}")
+            print(f"{SYMBOLS['success']} 使用接入点: {self.endpoint_id}")
         except Exception as e:
             raise ValueError(f"初始化Ark客户端失败: {e}")
         

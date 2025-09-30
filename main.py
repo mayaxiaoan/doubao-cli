@@ -10,6 +10,7 @@ import sys
 import os
 import locale
 from doubao_client import DoubaoClient
+from config import SYMBOLS
 
 
 def setup_encoding():
@@ -38,7 +39,7 @@ def setup_encoding():
         
         return True
     except Exception as e:
-        print(f"⚠️ 编码环境设置警告: {e}")
+        print(f"{SYMBOLS['warning']} 编码环境设置警告: {e}")
         return False
 
 
@@ -50,7 +51,7 @@ def waiting_animation(stop_event):
         stop_event: 线程停止事件
     """
     # 使用旋转的动画字符，看起来更生动
-    spinners = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    spinners = SYMBOLS['spinner']
     messages = ["正在连接豆包AI...", "正在思考中...", "正在组织语言...", "马上就好..."]
     
     idx = 0
@@ -63,7 +64,7 @@ def waiting_animation(stop_event):
             msg_idx = (msg_idx + 1) % len(messages)
         
         # 显示动画，每次都清除可能的残留文字
-        current_msg = f'🤖 豆包: {spinners[idx]} {messages[msg_idx]}'
+        current_msg = f'{SYMBOLS["bot"]} 豆包: {spinners[idx]} {messages[msg_idx]}'
         print(f'\r{current_msg}' + ' ' * 20, end='', flush=True)  # 在消息后添加空格清除残留
         
         idx = (idx + 1) % len(spinners)
@@ -72,7 +73,7 @@ def waiting_animation(stop_event):
     
     # 完全清除整行，避免遗留等待文字
     print('\r' + ' ' * 80, end='')  # 用空格完全覆盖可能的长文字
-    print('\r🤖 豆包: ', end='', flush=True)
+    print(f'\r{SYMBOLS["bot"]} 豆包: ', end='', flush=True)
 
 
 def safe_input(prompt):
@@ -87,10 +88,10 @@ def safe_input(prompt):
             user_input = user_input.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
         return user_input.strip()
     except UnicodeDecodeError as e:
-        print(f"⚠️ 输入编码错误: {e}")
+        print(f"{SYMBOLS['warning']} 输入编码错误: {e}")
         return ""
     except Exception as e:
-        print(f"⚠️ 输入处理错误: {e}")
+        print(f"{SYMBOLS['warning']} 输入处理错误: {e}")
         return ""
 
 
@@ -104,7 +105,7 @@ def safe_print(text, end='\n', flush=False):
         # 如果仍有编码问题，使用ASCII模式
         safe_text = text.encode('ascii', errors='replace').decode('ascii')
         print(safe_text, end=end, flush=flush)
-        print(f"⚠️ 字符编码问题已处理: {e}")
+        print(f"{SYMBOLS['warning']} 字符编码问题已处理: {e}")
     except Exception as e:
         print(f"输出错误: {e}", end=end, flush=flush)
 
@@ -114,22 +115,24 @@ def main():
     # 首先设置编码环境
     encoding_ok = setup_encoding()
     
-    safe_print("=" * 70)
-    safe_print("🤖 豆包AI聊天程序 (支持上下文对话 + 深度思考控制)")
-    safe_print("=" * 70)
-    safe_print("💡 输入消息开始聊天")
-    safe_print("💡 输入 'exit' 或 'quit' 退出程序")
-    safe_print("💡 输入 'clear' 清空对话历史")
-    safe_print("💡 深度思考控制：")
+    safe_print(f"{SYMBOLS['separator']}" * 70)
+    safe_print(f"    {SYMBOLS['star']} 豆包AI聊天程序 (支持上下文对话 + 深度思考控制) {SYMBOLS['star']}")
+    safe_print(f"{SYMBOLS['separator']}" * 70)
+    print()  # 添加一个空行使界面更清晰
+    safe_print(f"{SYMBOLS['info']} 输入消息开始聊天")
+    safe_print(f"{SYMBOLS['info']} 输入 'exit' 或 'quit' 退出程序")
+    safe_print(f"{SYMBOLS['info']} 输入 'clear' 清空对话历史")
+    safe_print(f"{SYMBOLS['info']} 深度思考控制：")
     safe_print("   - 默认：自动判断是否需要深度思考")
     safe_print("   - #think 开头：强制启用深度思考")
     safe_print("   - #fast 开头：禁用深度思考，快速回复")
-    safe_print("=" * 70)
+    safe_print(f"{SYMBOLS['separator']}" * 70)
+    print()  # 添加一个空行
     
     try:
         # 初始化豆包客户端
         client = DoubaoClient()
-        safe_print("✅ 豆包AI客户端初始化成功")
+        safe_print(f"{SYMBOLS['success']} 豆包AI客户端初始化成功")
         
         # 开始聊天循环
         while True:
@@ -141,22 +144,22 @@ def main():
                 status = " (新对话)"
             
             # 获取用户输入（使用安全输入函数）
-            user_input = safe_input(f"\n👤 您{status}: ")
+            user_input = safe_input(f"\n{SYMBOLS['user']} 您{status}: ")
             
             # 检查退出命令
             if user_input.lower() in ['exit', 'quit', '退出', '再见']:
-                print("👋 感谢使用豆包AI聊天程序，再见！")
+                print(f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！")
                 break
             
             # 检查清空历史命令
             if user_input.lower() in ['clear', '清空', 'reset']:
                 client.clear_history()
-                print("✅ 对话历史已清空")
+                print(f"{SYMBOLS['success']} 对话历史已清空")
                 continue
             
             # 检查空输入
             if not user_input:
-                print("⚠️  请输入有效的消息")
+                print(f"{SYMBOLS['warning']}  请输入有效的消息")
                 continue
             
             # 解析深度思考控制符号
@@ -175,7 +178,7 @@ def main():
             
             # 检查处理后的消息是否为空
             if not actual_message.strip():
-                print("⚠️  请在控制符号后输入有效的消息")
+                print(f"{SYMBOLS['warning']}  请在控制符号后输入有效的消息")
                 continue
             
             # 发送消息并获取流式回复
@@ -207,7 +210,7 @@ def main():
                         time.sleep(0.15)  # 给动画线程时间完成清除操作
                         # 完全清除动画文字
                         print('\r' + ' ' * 80, end='')
-                        print("\r⏰ 请求超时，正在尝试重新连接...")
+                        print(f"\r{SYMBOLS['timeout']} 请求超时，正在尝试重新连接...")
                         break
                     
                     if chunk_data is None:
@@ -221,8 +224,8 @@ def main():
                                 stop_animation.set()
                                 time.sleep(0.15)
                                 first_chunk_received = True
-                            print(f"\n💭 深度思考中...{thinking_status}")
-                            print("-" * 50)
+                            print(f"\n{SYMBOLS['thinking']} 深度思考中...{thinking_status}")
+                            print(f"{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}")
                             reasoning_displayed = True
                         safe_print(chunk_data['reasoning'], end="", flush=True)
                         response_chunks.append(chunk_data['reasoning'])
@@ -233,8 +236,8 @@ def main():
                         if not content_started:
                             if reasoning_displayed:
                                 # 如果之前显示过深度思考，现在开始显示回复
-                                print("\n" + "-" * 50)
-                                print(f"🤖 豆包{thinking_status}: ", end="", flush=True)
+                                print(f"\n{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}")
+                                print(f"{SYMBOLS['bot']} 豆包{thinking_status}: ", end="", flush=True)
                             elif not first_chunk_received:
                                 # 如果没有深度思考，直接开始显示回复（动画会自动清除前缀）
                                 stop_animation.set()  # 停止动画
@@ -265,7 +268,7 @@ def main():
                 
                 # 检查是否有完整回复
                 if not response_chunks:
-                    print("❌ 获取回复失败，请检查网络连接和API配置")
+                    print(f"{SYMBOLS['error']} 获取回复失败，请检查网络连接和API配置")
                     
             except Exception as e:
                 # 停止动画
@@ -275,34 +278,34 @@ def main():
                 
                 # 完全清除动画文字
                 print('\r' + ' ' * 80, end='')
-                print(f"\r❌ 流式输出异常: {e}")
-                print("💡 尝试使用非流式模式...")
+                print(f"\r{SYMBOLS['error']} 流式输出异常: {e}")
+                print(f"{SYMBOLS['info']} 尝试使用非流式模式...")
                 
                 # 回退到非流式模式
-                print(f"🤖 豆包{thinking_status}: ", end="", flush=True)
+                print(f"{SYMBOLS['bot']} 豆包{thinking_status}: ", end="", flush=True)
                 response_data = client.chat(actual_message, thinking_mode)
                 if response_data and response_data.get('content'):
                     # 先显示深度思考（如果有）
                     if response_data.get('is_reasoning') and response_data.get('reasoning'):
-                        print(f"\n💭 深度思考内容{thinking_status}:")
-                        print("-" * 50)
+                        print(f"\n{SYMBOLS['thinking']} 深度思考内容{thinking_status}:")
+                        print(f"{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}")
                         print(response_data['reasoning'])
-                        print("-" * 50)
-                        print(f"🤖 豆包{thinking_status}: ", end="")
+                        print(f"{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}")
+                        print(f"{SYMBOLS['bot']} 豆包{thinking_status}: ", end="")
                     
                     print(response_data['content'])
                 else:
-                    print("❌ 获取回复失败，请检查网络连接和API配置")
+                    print(f"{SYMBOLS['error']} 获取回复失败，请检查网络连接和API配置")
     
     except ValueError as e:
-        print(f"❌ 配置错误: {e}")
-        print("📝 请检查config.py文件，确保已正确填写API密钥信息")
+        print(f"{SYMBOLS['error']} 配置错误: {e}")
+        print(f"{SYMBOLS['docs']} 请检查config.py文件，确保已正确填写API密钥信息")
     except KeyboardInterrupt:
-        print("\n\n👋 程序被用户中断，再见！")
+        print(f"\n\n{SYMBOLS['goodbye']} 程序被用户中断，再见！")
         # 确保所有线程正常退出
         sys.exit(0)
     except Exception as e:
-        print(f"❌ 程序运行异常: {e}")
+        print(f"{SYMBOLS['error']} 程序运行异常: {e}")
 
 
 if __name__ == "__main__":
