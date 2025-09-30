@@ -157,7 +157,7 @@ def main():
     colored_print(f"{SYMBOLS['info']} 输入消息开始聊天", 'system_info')
     colored_print(f"{SYMBOLS['info']} 输入 'exit' 、'quit' 或 '退出' 关闭程序", 'system_info')
     colored_print(f"{SYMBOLS['info']} 输入 'clear'、'new' 或 '新话题' 开始新的聊天", 'system_info')
-    colored_print(f"{SYMBOLS['info']} 输入 'persona' 或 '身份' 查看和切换AI身份", 'system_info')
+    #colored_print(f"{SYMBOLS['info']} 输入 'persona' 或 '身份' 查看和切换AI身份", 'system_info')
     colored_print(f"{SYMBOLS['info']} 深度思考控制：", 'system_info')
     colored_print("   - 默认：自动判断是否需要深度思考", 'system_info')
     colored_print("   - #think 开头：强制启用深度思考", 'system_info')
