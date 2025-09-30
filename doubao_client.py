@@ -7,7 +7,7 @@
 import os
 import sys
 from volcenginesdkarkruntime import Ark
-from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P, SYMBOLS, COLORS, ENABLE_COLORS
+from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P, SYMBOLS, COLORS, ENABLE_COLORS, AI_PERSONALITY, CURRENT_PERSONALITY, DEFAULT_THINKING_MODE
 
 
 def colored_print(text, color_key='reset'):
@@ -65,7 +65,8 @@ class DoubaoClient:
         
         # 初始化对话历史
         self.conversation_history = []
-        self.system_message = "你是豆包，是由字节跳动开发的 AI 人工智能助手。"
+        self.current_personality = CURRENT_PERSONALITY
+        self.system_message = AI_PERSONALITY.get(CURRENT_PERSONALITY, AI_PERSONALITY['default'])
         
         # 设置系统消息
         self._add_system_message()
@@ -100,6 +101,47 @@ class DoubaoClient:
     def get_conversation_length(self):
         """获取对话轮数（不包含系统消息）"""
         return len([msg for msg in self.conversation_history if msg["role"] != "system"])
+    
+    def change_personality(self, personality_key):
+        """
+        切换AI身份
+        
+        Args:
+            personality_key (str): 身份键名，必须在AI_PERSONALITY中存在
+            
+        Returns:
+            bool: 切换成功返回True，失败返回False
+        """
+        if personality_key in AI_PERSONALITY:
+            self.current_personality = personality_key
+            self.system_message = AI_PERSONALITY[personality_key]
+            # 重置对话历史并应用新身份
+            self.clear_history()
+            colored_print(f"{SYMBOLS['success']} AI身份已切换为: {personality_key}", 'system_success')
+            return True
+        else:
+            colored_print(f"{SYMBOLS['error']} 未知的身份类型: {personality_key}", 'system_error')
+            return False
+    
+    def get_personality_info(self):
+        """
+        获取当前AI身份信息
+        
+        Returns:
+            dict: 包含当前身份信息的字典
+        """
+        return {
+            'current': self.current_personality,
+            'message': self.system_message,
+            'available': list(AI_PERSONALITY.keys())
+        }
+    
+    def show_available_personalities(self):
+        """显示所有可用的AI身份"""
+        colored_print(f"{SYMBOLS['info']} 可用的AI身份类型:", 'system_info')
+        for key, description in AI_PERSONALITY.items():
+            status = " [当前]" if key == self.current_personality else ""
+            colored_print(f"  • {key}{status}: {description[:50]}{'...' if len(description) > 50 else ''}", 'system_info')
     
     def chat(self, message, thinking_mode="auto"):
         """

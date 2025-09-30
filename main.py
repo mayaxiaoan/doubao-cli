@@ -10,7 +10,7 @@ import sys
 import os
 import locale
 from doubao_client import DoubaoClient
-from config import SYMBOLS, COLORS, ENABLE_COLORS
+from config import SYMBOLS, COLORS, ENABLE_COLORS, DEFAULT_THINKING_MODE
 
 
 def setup_encoding():
@@ -157,6 +157,7 @@ def main():
     colored_print(f"{SYMBOLS['info']} 输入消息开始聊天", 'system_info')
     colored_print(f"{SYMBOLS['info']} 输入 'exit' 、'quit' 或 '退出' 关闭程序", 'system_info')
     colored_print(f"{SYMBOLS['info']} 输入 'clear'、'new' 或 '新话题' 开始新的聊天", 'system_info')
+    colored_print(f"{SYMBOLS['info']} 输入 'persona' 或 '身份' 查看和切换AI身份", 'system_info')
     colored_print(f"{SYMBOLS['info']} 深度思考控制：", 'system_info')
     colored_print("   - 默认：自动判断是否需要深度思考", 'system_info')
     colored_print("   - #think 开头：强制启用深度思考", 'system_info')
@@ -181,6 +182,12 @@ def main():
             # 获取用户输入（使用安全输入函数）
             user_input = colored_input(f"\n{SYMBOLS['user']} 您{status}: ", 'user_text')
             
+            # 用绿色重新显示用户输入的完整内容（覆盖白色输入）
+            if user_input.strip():  # 只有非空输入才重新显示
+                # 清除上一行并重新以绿色显示
+                print(f"\033[1A\033[2K", end="")  # 向上一行并清除整行
+                colored_print(f"{SYMBOLS['user']} 您{status}: {user_input}", 'user_text')
+            
             # 检查退出命令
             if user_input.lower() in ['exit', 'quit', '退出']:
                 colored_print(f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！", 'system_info')
@@ -192,13 +199,32 @@ def main():
                 colored_print(f"{SYMBOLS['success']} 对话历史已清空，我们可以开始新的聊天话题", 'system_success')
                 continue
             
+            # 检查身份管理命令
+            if user_input.lower() in ['persona', '身份', 'personality']:
+                client.show_available_personalities()
+                colored_print(f"{SYMBOLS['info']} 使用 'persona:<身份名>' 切换身份，例如: persona:catgirl", 'system_info')
+                continue
+            
+            # 检查身份切换命令
+            if user_input.lower().startswith('persona:') or user_input.startswith('身份:'):
+                separator = ':' if ':' in user_input else '：'
+                parts = user_input.split(separator, 1)
+                if len(parts) == 2:
+                    personality_key = parts[1].strip()
+                    if client.change_personality(personality_key):
+                        info = client.get_personality_info()
+                        colored_print(f"{SYMBOLS['success']} 系统提示: {info['message'][:100]}{'...' if len(info['message']) > 100 else ''}", 'system_success')
+                else:
+                    colored_print(f"{SYMBOLS['warning']} 格式错误，请使用: persona:<身份名>", 'system_warning')
+                continue
+            
             # 检查空输入
             if not user_input:
                 colored_print(f"{SYMBOLS['warning']}  没有收到你的文字哦，请输入有效的消息", 'system_warning')
                 continue
             
             # 解析深度思考控制符号
-            thinking_mode = "auto"  # 默认自动判断
+            thinking_mode = DEFAULT_THINKING_MODE  # 使用配置的默认模式
             actual_message = user_input  # 实际发送的消息
             thinking_status = ""  # 显示给用户的状态
             
