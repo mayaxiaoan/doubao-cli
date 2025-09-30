@@ -129,8 +129,8 @@ def main():
     safe_print("    \\(()-())")
     safe_print(" ~~~~~~~~~~~~~~~") 
     safe_print(f"{SYMBOLS['info']} 输入消息开始聊天")
-    safe_print(f"{SYMBOLS['info']} 输入 'exit' 或 'quit' 退出程序")
-    safe_print(f"{SYMBOLS['info']} 输入 'clear' 清空对话历史")
+    safe_print(f"{SYMBOLS['info']} 输入 'exit' 、'quit' 或 '退出' 关闭程序")
+    safe_print(f"{SYMBOLS['info']} 输入 'clear'、'new' 或 '新话题' 开始新的聊天")
     safe_print(f"{SYMBOLS['info']} 深度思考控制：")
     safe_print("   - 默认：自动判断是否需要深度思考")
     safe_print("   - #think 开头：强制启用深度思考")
@@ -156,19 +156,19 @@ def main():
             user_input = safe_input(f"\n{SYMBOLS['user']} 您{status}: ")
             
             # 检查退出命令
-            if user_input.lower() in ['exit', 'quit', '退出', '再见']:
+            if user_input.lower() in ['exit', 'quit', '退出']:
                 print(f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！")
                 break
             
             # 检查清空历史命令
-            if user_input.lower() in ['clear', '清空', 'reset']:
+            if user_input.lower() in ['clear', 'new','新话题']:
                 client.clear_history()
-                print(f"{SYMBOLS['success']} 对话历史已清空")
+                print(f"{SYMBOLS['success']} 对话历史已清空，我们可以开始新的聊天话题")
                 continue
             
             # 检查空输入
             if not user_input:
-                print(f"{SYMBOLS['warning']}  请输入有效的消息")
+                print(f"{SYMBOLS['warning']}  没有收到你的文字哦，请输入有效的消息")
                 continue
             
             # 解析深度思考控制符号
