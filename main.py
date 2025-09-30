@@ -116,9 +116,18 @@ def main():
     encoding_ok = setup_encoding()
     
     safe_print(f"{SYMBOLS['separator']}" * 70)
-    safe_print(f"    {SYMBOLS['star']} 豆包AI聊天程序 (支持上下文对话 + 深度思考控制) {SYMBOLS['star']}")
+    safe_print(f"    {SYMBOLS['star']} 我是制杖但勤劳的豆包AI (支持上下文对话 + 深度思考控制) {SYMBOLS['star']}")
     safe_print(f"{SYMBOLS['separator']}" * 70)
     print()  # 添加一个空行使界面更清晰
+    # 显示可爱的ASCII艺术猫
+    safe_print("      /\\_/\\    QUÉ MIRA BOBO?")
+    safe_print(" /\\  / o o \\    ﾉ")
+    safe_print("//\\\\ \\~(*)~/")
+    safe_print("`  \\/   ^ /")
+    safe_print("   | \\|| ||")
+    safe_print("   \\ '|| ||")
+    safe_print("    \\(()-())")
+    safe_print(" ~~~~~~~~~~~~~~~") 
     safe_print(f"{SYMBOLS['info']} 输入消息开始聊天")
     safe_print(f"{SYMBOLS['info']} 输入 'exit' 或 'quit' 退出程序")
     safe_print(f"{SYMBOLS['info']} 输入 'clear' 清空对话历史")
