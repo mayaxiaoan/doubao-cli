@@ -7,7 +7,16 @@
 import os
 import sys
 from volcenginesdkarkruntime import Ark
-from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P, SYMBOLS
+from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P, SYMBOLS, COLORS, ENABLE_COLORS
+
+
+def colored_print(text, color_key='reset'):
+    """带颜色的打印函数"""
+    if ENABLE_COLORS and color_key in COLORS:
+        colored_text = f"{COLORS[color_key]}{text}{COLORS['reset']}"
+    else:
+        colored_text = text
+    print(colored_text)
 
 
 def safe_decode_response(content):
@@ -26,7 +35,7 @@ def safe_decode_response(content):
         else:
             return str(content)
     except Exception as e:
-        print(f"{SYMBOLS['warning']} 响应内容编码处理错误: {e}")
+        colored_print(f"{SYMBOLS['warning']} 响应内容编码处理错误: {e}", 'system_warning')
         return str(content) if content else ""
 
 
@@ -50,7 +59,7 @@ class DoubaoClient:
                 base_url=API_BASE_URL,
                 api_key=self.api_key,
             )
-            print(f"{SYMBOLS['success']} 使用接入点: {self.endpoint_id}")
+            colored_print(f"{SYMBOLS['success']} 使用接入点: {self.endpoint_id}", 'system_success')
         except Exception as e:
             raise ValueError(f"初始化Ark客户端失败: {e}")
         

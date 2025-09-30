@@ -82,3 +82,49 @@ SYMBOLS = {
     'star_empty': '☆',       # 空心星
     'music': '♪(๑ᴖ◡ᴖ๑)♪',   # 音乐表情
 }
+
+# FBTERM终端颜色配置 - 使用ANSI颜色代码
+COLORS = {
+    # 重置颜色
+    'reset': '\033[0m',
+    
+    # 基础颜色 (30-37为前景色，90-97为亮色)
+    'black': '\033[30m',
+    'red': '\033[31m', 
+    'green': '\033[32m',
+    'yellow': '\033[33m',
+    'blue': '\033[34m',
+    'magenta': '\033[35m',
+    'cyan': '\033[36m',
+    'white': '\033[37m',
+    
+    # 亮色版本
+    'bright_black': '\033[90m',    # 灰色
+    'bright_red': '\033[91m',
+    'bright_green': '\033[92m',
+    'bright_yellow': '\033[93m',
+    'bright_blue': '\033[94m', 
+    'bright_magenta': '\033[95m',
+    'bright_cyan': '\033[96m',
+    'bright_white': '\033[97m',
+    
+    # 文字样式
+    'bold': '\033[1m',            # 粗体
+    'dim': '\033[2m',             # 暗淡
+    'italic': '\033[3m',          # 斜体
+    'underline': '\033[4m',       # 下划线
+    
+    # 聊天内容颜色方案
+    'user_text': '\033[36m',      # 青色 - 用户输入
+    'bot_text': '\033[92m',       # 亮绿色 - 豆包回复
+    'bot_thinking': '\033[95m',   # 亮洋红色 - 豆包思考
+    'system_info': '\033[94m',    # 亮蓝色 - 系统信息
+    'system_success': '\033[32m', # 绿色 - 成功消息
+    'system_warning': '\033[93m', # 亮黄色 - 警告
+    'system_error': '\033[91m',   # 亮红色 - 错误
+    'separator_line': '\033[90m', # 灰色 - 分隔线
+    'cat_art': '\033[35m',        # 洋红色 - ASCII艺术猫
+}
+
+# 是否启用颜色 (可以通过这个开关控制)
+ENABLE_COLORS = True
