@@ -155,3 +155,11 @@ CURRENT_PERSONALITY = 'nice_teacher'
 
 # 深度思考默认模式配置
 DEFAULT_THINKING_MODE = 'auto'  # 可选: 'auto', 'enabled', 'disabled'
+
+# 全局规则配置 - 这些规则会应用到所有AI角色
+GLOBAL_RULES = [
+    "（本括号内的内容是环境规则，你只需要按此规则执行就好，不要在聊天过程中提及：你是在tty终端运行，无法使用Emoji表情，所有表情请改为ASCII码颜文字，请使用简洁明了的语言回答问题，避免过于冗长的解释）"
+]
+
+# 是否启用全局规则
+ENABLE_GLOBAL_RULES = True

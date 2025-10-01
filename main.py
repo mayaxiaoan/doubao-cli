@@ -158,10 +158,11 @@ def main():
     colored_print(f"{SYMBOLS['info']} 输入 'exit' 、'quit' 或 '退出' 关闭程序", 'system_info')
     colored_print(f"{SYMBOLS['info']} 输入 'clear'、'new' 或 '新话题' 开始新的聊天", 'system_info')
     #colored_print(f"{SYMBOLS['info']} 输入 'persona' 或 '身份' 查看和切换AI身份", 'system_info')
+    #colored_print(f"{SYMBOLS['info']} 输入 'health'、'status' 或 '健康' 检查连接状态", 'system_info')
     colored_print(f"{SYMBOLS['info']} 深度思考控制：", 'system_info')
-    colored_print("   - 默认：自动判断是否需要深度思考", 'system_info')
-    colored_print("   - #think 开头：强制启用深度思考", 'system_info')
-    colored_print("   - #fast 开头：禁用深度思考，快速回复", 'system_info')
+    colored_print("   - 默认：自动判断是否需要深度思考", 'system_info')
+    colored_print("   - #think 开头：强制启用深度思考", 'system_info')
+    colored_print("   - #fast 开头：禁用深度思考，快速回复", 'system_info')
     colored_print(f"{SYMBOLS['separator']}" * 70, 'separator_line')
     print()  # 添加一个空行
     
@@ -203,6 +204,15 @@ def main():
             if user_input.lower() in ['persona', '身份', 'personality']:
                 client.show_available_personalities()
                 colored_print(f"{SYMBOLS['info']} 使用 'persona:<身份名>' 切换身份，例如: persona:catgirl", 'system_info')
+                continue
+            
+            # 检查健康状态命令
+            if user_input.lower() in ['health', 'status', '健康', '状态']:
+                health_info = client.health_check()
+                if health_info['status'] == 'healthy':
+                    colored_print(f"{SYMBOLS['success']} 连接状态: {health_info['message']} (响应时间: {health_info['response_time']}秒)", 'system_success')
+                else:
+                    colored_print(f"{SYMBOLS['error']} 连接状态: {health_info['message']}", 'system_error')
                 continue
             
             # 检查身份切换命令

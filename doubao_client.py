@@ -7,7 +7,7 @@
 import os
 import sys
 from volcenginesdkarkruntime import Ark
-from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P, SYMBOLS, COLORS, ENABLE_COLORS, AI_PERSONALITY, CURRENT_PERSONALITY, DEFAULT_THINKING_MODE
+from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P, SYMBOLS, COLORS, ENABLE_COLORS, AI_PERSONALITY, CURRENT_PERSONALITY, DEFAULT_THINKING_MODE, GLOBAL_RULES, ENABLE_GLOBAL_RULES
 
 
 def colored_print(text, color_key='reset'):
@@ -16,7 +16,20 @@ def colored_print(text, color_key='reset'):
         colored_text = f"{COLORS[color_key]}{text}{COLORS['reset']}"
     else:
         colored_text = text
-    print(colored_text)
+    
+    # 处理Windows下的Unicode编码问题
+    try:
+        print(colored_text)
+    except UnicodeEncodeError:
+        # 如果遇到编码错误，使用ASCII安全的方式
+        try:
+            # 尝试用gbk编码，替换无法编码的字符
+            safe_text = colored_text.encode('gbk', errors='replace').decode('gbk', errors='replace')
+            print(safe_text)
+        except:
+            # 最后的备用方案：只保留ASCII字符
+            ascii_text = ''.join(char if ord(char) < 128 else '?' for char in colored_text)
+            print(ascii_text)
 
 
 def safe_decode_response(content):
@@ -63,6 +76,9 @@ class DoubaoClient:
         except Exception as e:
             raise ValueError(f"初始化Ark客户端失败: {e}")
         
+        # 测试API连接
+        self._test_connection()
+        
         # 初始化对话历史
         self.conversation_history = []
         self.current_personality = CURRENT_PERSONALITY
@@ -71,13 +87,60 @@ class DoubaoClient:
         # 设置系统消息
         self._add_system_message()
     
+    def _test_connection(self):
+        """测试API连接是否正常"""
+        try:
+            colored_print(f"{SYMBOLS['connect']} 正在测试API连接...", 'system_info')
+            
+            # 发送一个简单的测试请求，使用独立的会话避免影响聊天上下文
+            test_response = self.client.chat.completions.create(
+                model=self.endpoint_id,
+                messages=[
+                    {"role": "system", "content": "你是一个测试助手，只需要简单回复'OK'即可。"},
+                    {"role": "user", "content": "ping"}
+                ],
+                max_tokens=5,  # 只请求很少的token
+                temperature=0.1,
+                top_p=0.1
+            )
+            
+            if test_response.choices and len(test_response.choices) > 0:
+                colored_print(f"{SYMBOLS['success']} API连接测试成功", 'system_success')
+            else:
+                raise Exception("API响应格式异常")
+                
+        except Exception as e:
+            error_msg = f"API连接测试失败: {e}"
+            colored_print(f"{SYMBOLS['error']} {error_msg}", 'system_error')
+            raise ValueError(error_msg)
+    
     def _add_system_message(self):
         """添加系统消息"""
         if not self.conversation_history:  # 只在历史为空时添加
+            # 构建完整的系统消息：全局规则 + AI身份
+            full_system_message = self._build_system_message()
             self.conversation_history.append({
                 "role": "system",
-                "content": self.system_message
+                "content": full_system_message
             })
+    
+    def _build_system_message(self):
+        """构建完整的系统消息，包含全局规则和AI身份"""
+        message_parts = []
+        
+        # 添加AI身份
+        message_parts.append("=== AI身份 ===")
+        message_parts.append(self.system_message)
+        
+        # 添加全局规则（如果启用）
+        if ENABLE_GLOBAL_RULES and GLOBAL_RULES:
+            message_parts.append("=== 全局规则 ===")
+            for rule in GLOBAL_RULES:
+                message_parts.append(f"• {rule}")
+            message_parts.append("")  # 空行分隔
+        
+        
+        return "\n".join(message_parts)
     
     def add_user_message(self, message):
         """添加用户消息到对话历史"""
@@ -115,7 +178,7 @@ class DoubaoClient:
         if personality_key in AI_PERSONALITY:
             self.current_personality = personality_key
             self.system_message = AI_PERSONALITY[personality_key]
-            # 重置对话历史并应用新身份
+            # 重置对话历史并应用新身份（包含全局规则）
             self.clear_history()
             colored_print(f"{SYMBOLS['success']} AI身份已切换为: {personality_key}", 'system_success')
             return True
@@ -142,6 +205,70 @@ class DoubaoClient:
         for key, description in AI_PERSONALITY.items():
             status = " [当前]" if key == self.current_personality else ""
             colored_print(f"  • {key}{status}: {description[:50]}{'...' if len(description) > 50 else ''}", 'system_info')
+    
+    def show_global_rules(self):
+        """显示当前全局规则"""
+        if ENABLE_GLOBAL_RULES and GLOBAL_RULES:
+            colored_print(f"{SYMBOLS['info']} 当前全局规则:", 'system_info')
+            for i, rule in enumerate(GLOBAL_RULES, 1):
+                colored_print(f"  {i}. {rule}", 'system_info')
+        else:
+            colored_print(f"{SYMBOLS['info']} 全局规则已禁用", 'system_info')
+    
+    def get_system_message_preview(self):
+        """获取系统消息预览（用于调试）"""
+        return self._build_system_message()
+    
+    def health_check(self):
+        """
+        健康检查 - 测试API连接状态
+        
+        Returns:
+            dict: 包含连接状态的字典
+            {
+                'status': str,        # 'healthy', 'unhealthy', 'unknown'
+                'message': str,       # 状态描述
+                'response_time': float # 响应时间（秒）
+            }
+        """
+        import time
+        
+        try:
+            start_time = time.time()
+            
+            # 发送一个简单的健康检查请求，使用独立的会话避免影响聊天上下文
+            test_response = self.client.chat.completions.create(
+                model=self.endpoint_id,
+                messages=[
+                    {"role": "system", "content": "你是一个测试助手，只需要简单回复'OK'即可。"},
+                    {"role": "user", "content": "ping"}
+                ],
+                max_tokens=5,
+                temperature=0.1,
+                top_p=0.1
+            )
+            
+            response_time = time.time() - start_time
+            
+            if test_response.choices and len(test_response.choices) > 0:
+                return {
+                    'status': 'healthy',
+                    'message': 'API连接正常',
+                    'response_time': round(response_time, 2)
+                }
+            else:
+                return {
+                    'status': 'unhealthy',
+                    'message': 'API响应格式异常',
+                    'response_time': round(response_time, 2)
+                }
+                
+        except Exception as e:
+            return {
+                'status': 'unhealthy',
+                'message': f'连接失败: {str(e)}',
+                'response_time': None
+            }
     
     def chat(self, message, thinking_mode="auto"):
         """
