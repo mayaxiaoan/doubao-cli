@@ -157,8 +157,7 @@ def main():
     colored_print(f"{SYMBOLS['info']} 输入消息开始聊天", 'system_info')
     colored_print(f"{SYMBOLS['info']} 输入 'exit' 、'quit' 或 '退出' 关闭程序", 'system_info')
     colored_print(f"{SYMBOLS['info']} 输入 'clear'、'new' 或 '新话题' 开始新的聊天", 'system_info')
-    #colored_print(f"{SYMBOLS['info']} 输入 'persona' 或 '身份' 查看和切换AI身份", 'system_info')
-    #colored_print(f"{SYMBOLS['info']} 输入 'health'、'status' 或 '健康' 检查连接状态", 'system_info')
+    #colored_print(f"{SYMBOLS['info']} 输入 'health'、'status' 或 '健康' 检查连接状态", 'system_info')#该命令为隐藏命令，不需要暴露给用户
     colored_print(f"{SYMBOLS['info']} 深度思考控制：", 'system_info')
     colored_print("   - 默认：自动判断是否需要深度思考", 'system_info')
     colored_print("   - #think 开头：强制启用深度思考", 'system_info')
@@ -200,11 +199,6 @@ def main():
                 colored_print(f"{SYMBOLS['success']} 对话历史已清空，我们可以开始新的聊天话题", 'system_success')
                 continue
             
-            # 检查身份管理命令
-            if user_input.lower() in ['persona', '身份', 'personality']:
-                client.show_available_personalities()
-                colored_print(f"{SYMBOLS['info']} 使用 'persona:<身份名>' 切换身份，例如: persona:catgirl", 'system_info')
-                continue
             
             # 检查健康状态命令
             if user_input.lower() in ['health', 'status', '健康', '状态']:
@@ -215,18 +209,6 @@ def main():
                     colored_print(f"{SYMBOLS['error']} 连接状态: {health_info['message']}", 'system_error')
                 continue
             
-            # 检查身份切换命令
-            if user_input.lower().startswith('persona:') or user_input.startswith('身份:'):
-                separator = ':' if ':' in user_input else '：'
-                parts = user_input.split(separator, 1)
-                if len(parts) == 2:
-                    personality_key = parts[1].strip()
-                    if client.change_personality(personality_key):
-                        info = client.get_personality_info()
-                        colored_print(f"{SYMBOLS['success']} 系统提示: {info['message'][:100]}{'...' if len(info['message']) > 100 else ''}", 'system_success')
-                else:
-                    colored_print(f"{SYMBOLS['warning']} 格式错误，请使用: persona:<身份名>", 'system_warning')
-                continue
             
             # 检查空输入
             if not user_input:
@@ -241,7 +223,7 @@ def main():
             if user_input.startswith("#think "):
                 thinking_mode = "enabled"
                 actual_message = user_input[7:]  # 去掉 "#think " 前缀
-                thinking_status = " [强制深度思考]"
+                thinking_status = " [要求深度思考]"
             elif user_input.startswith("#fast "):
                 thinking_mode = "disabled"
                 actual_message = user_input[6:]  # 去掉 "#fast " 前缀
@@ -308,7 +290,12 @@ def main():
                             if reasoning_displayed:
                                 # 如果之前显示过深度思考，现在开始显示回复
                                 colored_print(f"\n{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}", 'separator_line')
-                                colored_print(f"{SYMBOLS['bot']} 豆包{thinking_status}: ", 'bot_text', end="", flush=True)
+                                # 强制思考后不显示豆包标题和思考状态，直接显示内容
+                                if thinking_status == " [要求深度思考]":
+                                    # 不显示任何前缀，直接开始显示内容
+                                    pass
+                                else:
+                                    colored_print(f"{SYMBOLS['bot']} 豆包{thinking_status}: ", 'bot_text', end="", flush=True)
                             elif not first_chunk_received:
                                 # 如果没有深度思考，直接开始显示回复（动画会自动清除前缀）
                                 stop_animation.set()  # 停止动画
@@ -350,23 +337,7 @@ def main():
                 # 完全清除动画文字
                 print('\r' + ' ' * 80, end='')
                 colored_print(f"\r{SYMBOLS['error']} 流式输出异常: {e}", 'system_error')
-                colored_print(f"{SYMBOLS['info']} 尝试使用非流式模式...", 'system_info')
-                
-                # 回退到非流式模式
-                colored_print(f"{SYMBOLS['bot']} 豆包{thinking_status}: ", 'bot_text', end="", flush=True)
-                response_data = client.chat(actual_message, thinking_mode)
-                if response_data and response_data.get('content'):
-                    # 先显示深度思考（如果有）
-                    if response_data.get('is_reasoning') and response_data.get('reasoning'):
-                        colored_print(f"\n{SYMBOLS['thinking']} 深度思考内容{thinking_status}:", 'bot_thinking')
-                        print(f"{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}")
-                        print(response_data['reasoning'])
-                        print(f"{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}")
-                        colored_print(f"{SYMBOLS['bot']} 豆包{thinking_status}: ", 'bot_text', end="")
-                    
-                    print(response_data['content'])
-                else:
-                    colored_print(f"{SYMBOLS['error']} 获取回复失败，请检查网络连接和API配置", 'system_error')
+                colored_print(f"{SYMBOLS['error']} 获取回复失败，请检查网络连接和API配置", 'system_error')
     
     except ValueError as e:
         colored_print(f"{SYMBOLS['error']} 配置错误: {e}", 'system_error')

@@ -7,7 +7,7 @@
 import os
 import sys
 from volcenginesdkarkruntime import Ark
-from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P, SYMBOLS, COLORS, ENABLE_COLORS, AI_PERSONALITY, CURRENT_PERSONALITY, DEFAULT_THINKING_MODE, GLOBAL_RULES, ENABLE_GLOBAL_RULES
+from config import ARK_API_KEY, ARK_ENDPOINT_ID, API_BASE_URL, MAX_TOKENS, TEMPERATURE, TOP_P, SYMBOLS, COLORS, ENABLE_COLORS, DEFAULT_THINKING_MODE, GLOBAL_RULES, ENABLE_GLOBAL_RULES
 
 
 def colored_print(text, color_key='reset'):
@@ -81,8 +81,6 @@ class DoubaoClient:
         
         # 初始化对话历史
         self.conversation_history = []
-        self.current_personality = CURRENT_PERSONALITY
-        self.system_message = AI_PERSONALITY.get(CURRENT_PERSONALITY, AI_PERSONALITY['default'])
         
         # 设置系统消息
         self._add_system_message()
@@ -125,22 +123,11 @@ class DoubaoClient:
             })
     
     def _build_system_message(self):
-        """构建完整的系统消息，包含全局规则和AI身份"""
-        message_parts = []
-        
-        # 添加AI身份
-        message_parts.append("=== AI身份 ===")
-        message_parts.append(self.system_message)
-        
-        # 添加全局规则（如果启用）
+        """构建系统消息，只使用全局规则"""
         if ENABLE_GLOBAL_RULES and GLOBAL_RULES:
-            message_parts.append("=== 全局规则 ===")
-            for rule in GLOBAL_RULES:
-                message_parts.append(f"• {rule}")
-            message_parts.append("")  # 空行分隔
-        
-        
-        return "\n".join(message_parts)
+            return "\n".join(GLOBAL_RULES)
+        else:
+            return "你是豆包，是由字节跳动开发的 AI 人工智能助手。你乐于助人、知识丰富，会根据用户需求提供准确有用的回答。"
     
     def add_user_message(self, message):
         """添加用户消息到对话历史"""
@@ -165,46 +152,6 @@ class DoubaoClient:
         """获取对话轮数（不包含系统消息）"""
         return len([msg for msg in self.conversation_history if msg["role"] != "system"])
     
-    def change_personality(self, personality_key):
-        """
-        切换AI身份
-        
-        Args:
-            personality_key (str): 身份键名，必须在AI_PERSONALITY中存在
-            
-        Returns:
-            bool: 切换成功返回True，失败返回False
-        """
-        if personality_key in AI_PERSONALITY:
-            self.current_personality = personality_key
-            self.system_message = AI_PERSONALITY[personality_key]
-            # 重置对话历史并应用新身份（包含全局规则）
-            self.clear_history()
-            colored_print(f"{SYMBOLS['success']} AI身份已切换为: {personality_key}", 'system_success')
-            return True
-        else:
-            colored_print(f"{SYMBOLS['error']} 未知的身份类型: {personality_key}", 'system_error')
-            return False
-    
-    def get_personality_info(self):
-        """
-        获取当前AI身份信息
-        
-        Returns:
-            dict: 包含当前身份信息的字典
-        """
-        return {
-            'current': self.current_personality,
-            'message': self.system_message,
-            'available': list(AI_PERSONALITY.keys())
-        }
-    
-    def show_available_personalities(self):
-        """显示所有可用的AI身份"""
-        colored_print(f"{SYMBOLS['info']} 可用的AI身份类型:", 'system_info')
-        for key, description in AI_PERSONALITY.items():
-            status = " [当前]" if key == self.current_personality else ""
-            colored_print(f"  • {key}{status}: {description[:50]}{'...' if len(description) > 50 else ''}", 'system_info')
     
     def show_global_rules(self):
         """显示当前全局规则"""
@@ -269,73 +216,6 @@ class DoubaoClient:
                 'message': f'连接失败: {str(e)}',
                 'response_time': None
             }
-    
-    def chat(self, message, thinking_mode="auto"):
-        """
-        发送聊天消息并获取回复（非流式，支持上下文对话）
-        
-        Args:
-            message (str): 用户输入的消息
-            thinking_mode (str): 深度思考模式，可选值：
-                - "auto": 模型自行判断是否使用深度思考能力（默认）
-                - "enabled": 强制使用深度思考能力
-                - "disabled": 不使用深度思考能力
-            
-        Returns:
-            dict: 包含回复内容和深度思考的字典，失败则返回None
-            {
-                'content': str,           # 回复内容
-                'reasoning': str or None, # 深度思考内容（如果有）
-                'is_reasoning': bool      # 是否触发了深度思考
-                'thinking_mode': str      # 使用的思考模式
-            }
-        """
-        try:
-            # 添加用户消息到历史
-            self.add_user_message(message)
-            
-            response = self.client.chat.completions.create(
-                model=self.endpoint_id,
-                messages=self.conversation_history,  # 使用完整对话历史
-                max_tokens=MAX_TOKENS,
-                temperature=TEMPERATURE,
-                top_p=TOP_P,
-                thinking={"type": thinking_mode},  # 控制深度思考模式
-                # 启用推理会话应用层加密（可选）
-                extra_headers={'x-is-encrypted': 'true'}
-            )
-            
-            # 提取AI回复内容
-            if response.choices and len(response.choices) > 0:
-                message_obj = response.choices[0].message
-                content = safe_decode_response(message_obj.content)
-                
-                # 检查是否有深度思考内容
-                reasoning_content = None
-                is_reasoning = False
-                if hasattr(message_obj, 'reasoning_content') and message_obj.reasoning_content:
-                    reasoning_content = safe_decode_response(message_obj.reasoning_content)
-                    is_reasoning = True
-                
-                # 添加助手回复到历史
-                self.add_assistant_message(content)
-                
-                return {
-                    'content': content,
-                    'reasoning': reasoning_content,
-                    'is_reasoning': is_reasoning,
-                    'thinking_mode': thinking_mode
-                }
-            else:
-                print("API响应格式异常：未找到choices")
-                return None
-                
-        except Exception as e:
-            print(f"聊天请求失败: {e}")
-            # 打印更详细的错误信息用于调试
-            import traceback
-            print(f"详细错误信息: {traceback.format_exc()}")
-            return None
     
     def chat_stream(self, message, thinking_mode="auto"):
         """
