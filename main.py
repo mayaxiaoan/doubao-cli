@@ -168,17 +168,15 @@ def colored_input(prompt, color_key='user_text'):
         if cleaned_input:
             colored_print(f"\n{SYMBOLS['info']} 已自动清理错误字符，处理后的内容为:", 'system_info')
             colored_print(f"{SYMBOLS['user']} {cleaned_input}", 'bright_green')
-            colored_print(f"\n{SYMBOLS['info']} 按 Enter 确认发送，按 Esc 取消", 'system_info')
+            colored_print(f"\n{SYMBOLS['info']} 按 Enter 确认发送，按任意其他键取消", 'system_info')
             
             try:
                 key = getch()
                 if key == 'enter':
                     colored_print(f"{SYMBOLS['success']} 使用清理后的内容继续", 'system_success')
                     return cleaned_input
-                elif key == 'esc':
-                    colored_print(f"{SYMBOLS['info']} 已取消，请重新输入", 'system_info')
                 else:
-                    # 其他按键也视为取消
+                    # 任意其他按键都视为取消
                     colored_print(f"{SYMBOLS['info']} 已取消，请重新输入", 'system_info')
             except Exception as ex:
                 # 如果getch失败，回退到传统方式
