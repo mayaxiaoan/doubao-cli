@@ -18,9 +18,10 @@ class BatteryMonitor:
         self.battery_path = None
         self.is_desktop = False
         self.current_level = 100
-        self.is_charging = False
         self.stop_event = threading.Event()
         self.display_thread = None
+        self.is_user_scrolling = False  # 用户是否在滚动查看历史
+        self.last_cursor_position = None  # 记录上次光标位置
         self._find_battery_path()
     
     def _find_battery_path(self):
@@ -46,15 +47,14 @@ class BatteryMonitor:
         # 如果没有找到电池，判断为台式机
         self.is_desktop = True
         self.current_level = 100
-        self.is_charging = False
     
     def _read_battery_info(self):
         """读取电池信息"""
         if self.is_desktop:
-            return 100, False
+            return 100
         
         if not self.battery_path:
-            return 100, False
+            return 100
         
         try:
             # 读取电量百分比
@@ -73,89 +73,75 @@ class BatteryMonitor:
                         energy_full = int(f.read().strip())
                     level = int((energy_now / energy_full) * 100)
                 else:
-                    return 100, False
+                    return 100
             
-            # 读取充电状态 - 针对MacBook优化
-            is_charging = self._detect_charging_status()
-            
-            return level, is_charging
+            return level
             
         except (IOError, ValueError, ZeroDivisionError):
-            return 100, False
-    
-    def _detect_charging_status(self):
-        """检测充电状态 - 针对MacBook Air 2010优化"""
-        if not self.battery_path:
-            return False
-        
-        # 方法1: 读取电池status文件
-        status_file = os.path.join(self.battery_path, 'status')
-        if os.path.exists(status_file):
-            try:
-                with open(status_file, 'r') as f:
-                    status = f.read().strip().lower()
-                    # MacBook的Full状态也应该显示为充电中
-                    if status in ['charging', 'full']:
-                        return True
-            except:
-                pass
-        
-        # 方法2: 检查AC适配器状态（MacBook Air 2010使用ADP1）
-        ac_paths = [
-            '/sys/class/power_supply/ADP1',  # MacBook常见路径
-            '/sys/class/power_supply/AC',
-            '/sys/class/power_supply/ac'
-        ]
-        
-        for ac_path in ac_paths:
-            if os.path.exists(ac_path):
-                online_file = os.path.join(ac_path, 'online')
-                if os.path.exists(online_file):
-                    try:
-                        with open(online_file, 'r') as f:
-                            online = f.read().strip()
-                            if online == '1':
-                                return True
-                    except:
-                        pass
-        
-        # 方法3: 检查充电电流（备用方法）
-        current_file = os.path.join(self.battery_path, 'current_now')
-        if os.path.exists(current_file):
-            try:
-                with open(current_file, 'r') as f:
-                    current = int(f.read().strip())
-                    # 如果电流为正数，表示正在充电
-                    if current > 0:
-                        return True
-            except:
-                pass
-        
-        return False
+            return 100
     
     def get_battery_status(self):
         """获取电池状态信息"""
-        level, charging = self._read_battery_info()
+        level = self._read_battery_info()
         self.current_level = level
-        self.is_charging = charging
-        return level, charging
+        return level
     
-    def _get_battery_icon(self, level, charging):
-        """根据电量获取电池图标"""
-        return "⚡"  # 统一使用闪电图标
+    def _check_user_scrolling(self):
+        """检测用户是否在滚动查看历史信息"""
+        try:
+            # 简单的方法：检查终端是否处于交互状态
+            # 如果stdin不是tty或者终端不支持某些功能，则跳过检测
+            if not sys.stdin.isatty():
+                return False
+            
+            # 检查终端是否支持光标位置查询
+            # 发送查询命令并尝试读取响应
+            sys.stdout.write("\033[6n")
+            sys.stdout.flush()
+            
+            # 使用非阻塞方式检查是否有响应
+            import select
+            import sys
+            
+            # 检查stdin是否有数据可读（超时很短）
+            if select.select([sys.stdin], [], [], 0.01)[0]:
+                # 读取响应
+                response = sys.stdin.read(10)
+                if response.startswith('\033[') and response.endswith('R'):
+                    # 解析光标位置
+                    coords = response[2:-1].split(';')
+                    if len(coords) == 2:
+                        current_row = int(coords[0])
+                        terminal_height = os.get_terminal_size().lines
+                        
+                        # 如果光标不在最后一行，说明用户在查看历史
+                        if current_row < terminal_height:
+                            self.is_user_scrolling = True
+                            return True
+            
+            self.is_user_scrolling = False
+            return False
+            
+        except Exception:
+            # 如果检测失败，假设用户不在滚动
+            self.is_user_scrolling = False
+            return False
     
-    def _get_battery_color(self, level, charging):
+    def _get_battery_color(self, level):
         """根据电量获取颜色"""
-        if charging:
-            return COLORS.get('bright_green', '\033[92m')  # 充电中显示绿色
-        elif level < 20:
+        if level < 20:
             return COLORS.get('bright_red', '\033[91m')    # 低于20%显示红色
         else:
             return COLORS.get('bright_white', '\033[97m')  # 其他情况显示白色
     
     def _display_battery_info(self):
         """在右下角显示电池信息"""
-        level, charging = self.get_battery_status()
+        # 检查用户是否在滚动查看历史
+        if self._check_user_scrolling():
+            # 如果用户在滚动，暂停电池显示刷新
+            return
+        
+        level = self.get_battery_status()
         
         # 获取终端尺寸
         try:
@@ -169,7 +155,7 @@ class BatteryMonitor:
             color = COLORS.get('bright_white', '\033[97m')
         else:
             battery_text = f"⚡[{level}%]"
-            color = self._get_battery_color(level, charging)
+            color = self._get_battery_color(level)
         
         # 计算显示位置（右下角，始终靠右对齐）
         reset_color = COLORS.get('reset', '\033[0m')

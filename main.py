@@ -183,11 +183,11 @@ def main():
             else:
                 status = " (新对话)"
             
-            # 到达用户输入轮时立即显示电池信息
-            battery_monitor.refresh_now()
-            
             # 获取用户输入（使用安全输入函数）
             user_input = colored_input(f"\n{SYMBOLS['user']} 您{status}: ", 'user_text')
+            
+            # 用户输入提示显示完成后，再显示电池信息
+            battery_monitor.refresh_now()
             
             # 用绿色重新显示用户输入的完整内容（覆盖白色输入）
             if user_input.strip():  # 只有非空输入才重新显示
