@@ -107,8 +107,14 @@ def colored_print(text, color_key='reset', end='\n', flush=False):
             print(ascii_text, end=end, flush=flush)
 
 
+# 全局标志：记录是否已经显示过编码错误提示
+_encoding_error_tip_shown = False
+
+
 def colored_input(prompt, color_key='user_text'):
     """带颜色的安全输入函数"""
+    global _encoding_error_tip_shown
+    
     if ENABLE_COLORS and color_key in COLORS:
         colored_prompt = f"{COLORS[color_key]}{prompt}{COLORS['reset']}"
     else:
@@ -162,7 +168,11 @@ def colored_input(prompt, color_key='user_text'):
             colored_print(f"{prompt}[编码错误，输入内容无法显示]", 'system_error')
         
         colored_print(f"{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
-        colored_print(f"{SYMBOLS['info']} 这可能是删除汉字导致的，由于编码显示的问题，你每删除一个汉字实际要按三次回退键哦，记住次数，不要在意显示被删除的文字", 'system_warning')
+        
+        # 只在第一次显示详细提示
+        if not _encoding_error_tip_shown:
+            colored_print(f"{SYMBOLS['info']} 这可能是删除汉字导致的，由于编码显示的问题，你每删除一个汉字实际要按三次回退键哦，记住次数，不要在意显示被删除的文字", 'system_warning')
+            _encoding_error_tip_shown = True
         
         # 如果成功清理出有效内容，询问用户是否使用清理后的内容
         if cleaned_input:
