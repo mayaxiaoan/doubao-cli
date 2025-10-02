@@ -176,10 +176,12 @@ class BatteryMonitor:
             pass
     
     def stop_display(self):
-        """停止显示电池信息"""
+        """停止显示电池信息并清除显示"""
         self.stop_event.set()
         if self.display_thread:
             self.display_thread.join(timeout=1)
+        # 停止后自动清除显示
+        self.clear_display()
     
     def _display_loop(self):
         """显示循环"""

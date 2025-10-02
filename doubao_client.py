@@ -17,7 +17,7 @@ def safe_decode_response(content):
         if isinstance(content, bytes):
             return content.decode('utf-8', errors='replace')
         elif isinstance(content, str):
-            return content.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+            return content
         else:
             return str(content)
     except Exception:
@@ -38,6 +38,8 @@ class DoubaoClient:
         # 初始化Ark客户端
         try:
             self.client = Ark(base_url=API_BASE_URL, api_key=ARK_API_KEY)
+        except UnicodeDecodeError as e:
+            raise ValueError(f"UTF-8编码错误: {e}")
         except Exception as e:
             raise ValueError(f"初始化Ark客户端失败: {e}")
         

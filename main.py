@@ -24,6 +24,21 @@ def setup_encoding():
         return False
 
 
+def fix_fbterm_encoding(text):
+    """修复fbterm中文输入法导致的UTF-8编码问题"""
+    if not text:
+        return text
+    
+    try:
+        # 检查是否包含无效的UTF-8序列
+        text.encode('utf-8').decode('utf-8')
+        return text
+    except UnicodeDecodeError:
+        # 使用替换策略修复截断的UTF-8字节序列
+        fixed_text = text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+        return fixed_text
+
+
 def waiting_animation(stop_event):
     """显示等待动画"""
     spinners = SYMBOLS['spinner']
@@ -33,6 +48,7 @@ def waiting_animation(stop_event):
     msg_idx = 0
     msg_counter = 0
     
+    # 等待动画
     while not stop_event.is_set():
         if msg_counter > 0 and msg_counter % 30 == 0:
             msg_idx = (msg_idx + 1) % len(messages)
@@ -57,21 +73,66 @@ def waiting_animation(stop_event):
 
 
 def colored_print(text, color_key='reset', end='\n', flush=False):
-    """带颜色的打印函数"""
+    """带颜色的安全打印函数"""
     if ENABLE_COLORS and color_key in COLORS:
         colored_text = f"{COLORS[color_key]}{text}{COLORS['reset']}"
     else:
         colored_text = text
-    print(colored_text, end=end, flush=flush)
+    
+    # 处理UTF-8编码问题
+    try:
+        print(colored_text, end=end, flush=flush)
+    except UnicodeEncodeError:
+        # 如果遇到编码错误，使用ASCII安全的方式
+        try:
+            safe_text = colored_text.encode('gbk', errors='replace').decode('gbk', errors='replace')
+            print(safe_text, end=end, flush=flush)
+        except:
+            # 最后的备用方案：只保留ASCII字符
+            ascii_text = ''.join(char if ord(char) < 128 else '?' for char in colored_text)
+            print(ascii_text, end=end, flush=flush)
 
 
 def colored_input(prompt, color_key='user_text'):
-    """带颜色的输入函数"""
+    """带颜色的安全输入函数 - 专门处理fbterm中文输入法问题"""
     if ENABLE_COLORS and color_key in COLORS:
         colored_prompt = f"{COLORS[color_key]}{prompt}{COLORS['reset']}"
     else:
         colored_prompt = prompt
-    return input(colored_prompt).strip()
+    
+    try:
+        user_input = input(colored_prompt)
+        
+        # 专门处理fbterm中文输入法导致的UTF-8字节截断问题
+        if isinstance(user_input, str):
+            # 检查字符串是否包含无效的UTF-8序列
+            try:
+                # 尝试重新编码来检测无效序列
+                user_input.encode('utf-8').decode('utf-8')
+            except UnicodeDecodeError:
+                # 如果发现无效序列，使用替换策略修复
+                user_input = user_input.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+                print(f"\n{SYMBOLS['warning']} 检测到输入编码问题，已自动修复")
+        
+        elif isinstance(user_input, bytes):
+            # 处理字节输入
+            try:
+                user_input = user_input.decode('utf-8')
+            except UnicodeDecodeError:
+                # 对于截断的UTF-8字节序列，使用替换策略
+                user_input = user_input.decode('utf-8', errors='replace')
+                print(f"\n{SYMBOLS['warning']} 检测到字节编码问题，已自动修复")
+        
+        return user_input.strip()
+        
+    except UnicodeDecodeError as e:
+        print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}")
+        print(f"{SYMBOLS['info']} 这可能是fbterm中文输入法导致的，请重新输入")
+        return ""
+    except Exception as e:
+        print(f"\n{SYMBOLS['warning']} 输入处理错误: {e}")
+        print(f"{SYMBOLS['info']} 请重新输入")
+        return ""
 
 
 def main():
@@ -120,23 +181,27 @@ def main():
             # 获取用户输入
             user_input = colored_input(f"\n{SYMBOLS['user']} 您{status}: ", 'user_text')
             
+            # 修复fbterm中文输入法可能的编码问题
+            user_input = fix_fbterm_encoding(user_input)
+            
             # 重新显示用户输入
             if user_input.strip():
                 print(f"\033[1A\033[2K", end="")
                 colored_print(f"{SYMBOLS['user']} 您{status}: {user_input}", 'user_text')
             
-            # 检查命令
+            # 检查退出命令
             if user_input.lower() in ['exit', 'quit', '退出']:
                 colored_print(f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！", 'system_info')
                 battery_monitor.stop_display()
-                battery_monitor.clear_display()
                 break
             
+            # 清空对话历史
             if user_input.lower() in ['clear', 'new', '新话题']:
                 client.clear_history()
                 colored_print(f"{SYMBOLS['success']} 对话历史已清空，我们可以开始新的聊天话题", 'system_success')
                 continue
             
+            # 检查用户输入是否为空
             if not user_input:
                 colored_print(f"{SYMBOLS['warning']}  没有收到你的文字哦，请输入有效的消息", 'system_warning')
                 continue
@@ -155,6 +220,7 @@ def main():
                 actual_message = user_input[6:]
                 thinking_status = " [快速回复]"
             
+            #如果只有控制符号，实际内容为空，则给出提示
             if not actual_message.strip():
                 colored_print(f"{SYMBOLS['warning']}  请在控制符号后输入有效的消息", 'system_warning')
                 continue
@@ -169,10 +235,14 @@ def main():
             animation_thread.start()
             
             try:
+                # 该变量用于标记是否已经打印过深度思考内容，主要用于控制输出格式，防止重复打印
                 reasoning_displayed = False
+                # 该变量用于标记是否已经打印过普通回复内容，主要用于控制输出格式，防止重复打印
                 content_started = False
+                # 该变量用于标记是否已经收到流式回复的第一个内容块（无论是reasoning还是content），
+                # 主要用于停止等待动画和控制输出格式。
                 first_chunk_received = False
-                
+                # 遍历流式回复
                 for chunk_data in client.chat_stream(actual_message, thinking_mode):
                     if chunk_data is None:
                         continue
@@ -229,6 +299,9 @@ def main():
     except ValueError as e:
         colored_print(f"{SYMBOLS['error']} 配置错误: {e}", 'system_error')
         colored_print(f"{SYMBOLS['docs']} 请检查config.py文件，确保已正确填写API密钥信息", 'system_info')
+    except UnicodeDecodeError as e:
+        colored_print(f"{SYMBOLS['error']} UTF-8编码错误: {e}", 'system_error')
+        colored_print(f"{SYMBOLS['warning']} 程序将继续运行，但某些字符可能显示异常", 'system_warning')
     except KeyboardInterrupt:
         colored_print(f"\n\n{SYMBOLS['goodbye']} 程序被用户中断，再见！", 'system_info')
         battery_monitor.stop_display()
