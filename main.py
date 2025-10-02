@@ -111,10 +111,7 @@ def colored_input(prompt, color_key='user_text'):
             user_input = sys.stdin.readline().rstrip('\n\r')
             return user_input.strip()
     except UnicodeDecodeError as e:
-        # 当发生编码错误时，我们有原始字节数据
-        print(f"\033[1A\033[2K", end="")  # 向上一行并清除
-        
-        # 尝试用不同的方式显示原始输入
+        # 当发生编码错误时，先尝试自动修复
         displayed_input = None
         cleaned_input = None
         
@@ -130,8 +127,19 @@ def colored_input(prompt, color_key='user_text'):
                     displayed_input = raw_input.decode('gbk', errors='replace').rstrip('\n\r')
                     cleaned_input = displayed_input.replace('\ufffd', '').strip()
                 except:
-                    displayed_input = None
-                    cleaned_input = None
+                    pass
+        
+        # 如果成功清理出有效内容，静默修复并直接返回
+        if cleaned_input:
+            # 清除上一行（用户输入的那一行）
+            print(f"\033[1A\033[2K", end="")
+            # 用正常的绿色重新显示用户输入（就像没有错误一样）
+            colored_print(f"{prompt}{cleaned_input}", 'user_text')
+            # 直接返回清理后的内容，用户感觉不到任何错误
+            return cleaned_input
+        
+        # 只有在无法修复时才显示错误信息
+        print(f"\033[1A\033[2K", end="")  # 向上一行并清除
         
         # 用红色重新显示提示符和用户输入
         if displayed_input:
@@ -141,13 +149,6 @@ def colored_input(prompt, color_key='user_text'):
         
         colored_print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
         colored_print(f"{SYMBOLS['info']} 这可能是删除汉字导致的，由于编码显示的问题，你每删除一个汉字实际要按三次回退键哦，记住次数，不要在意显示被删除的文字", 'system_warning')
-        
-        # 如果成功清理出有效内容，自动使用清理后的内容
-        if cleaned_input:
-            colored_print(f"\n{SYMBOLS['success']} 已自动清理编码错误字符，处理后的内容:", 'system_success')
-            colored_print(f"{SYMBOLS['user']} {cleaned_input}", 'bright_green')
-            # 直接返回清理后的内容，自动继续
-            return cleaned_input
         
         return ""
     except Exception as e:
