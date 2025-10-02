@@ -92,26 +92,44 @@ def colored_input(prompt, color_key='user_text'):
     else:
         colored_prompt = prompt
     
-    # 存储用户实际输入的原始显示（包括可能的编码错误字符）
+    # 先打印提示符
+    print(colored_prompt, end='', flush=True)
+    
+    # 存储用户实际输入的原始字节数据
+    raw_input = None
     displayed_input = None
     
     try:
-        # 先打印提示符
-        print(colored_prompt, end='', flush=True)
-        # 然后读取用户输入
-        user_input = sys.stdin.readline().rstrip('\n\r')
-        displayed_input = user_input  # 保存显示的内容
-        return user_input.strip()
+        # 尝试从stdin.buffer读取原始字节
+        if hasattr(sys.stdin, 'buffer'):
+            raw_input = sys.stdin.buffer.readline()
+            # 尝试解码
+            user_input = raw_input.decode('utf-8').rstrip('\n\r')
+            return user_input.strip()
+        else:
+            # 如果没有buffer属性，使用常规方式
+            user_input = sys.stdin.readline().rstrip('\n\r')
+            return user_input.strip()
     except UnicodeDecodeError as e:
-        # 当发生编码错误时，清除上一行并用红色重新显示
+        # 当发生编码错误时，我们有原始字节数据
         print(f"\033[1A\033[2K", end="")  # 向上一行并清除
         
-        # 用红色重新显示提示符和用户输入（如果有）
+        # 尝试用不同的方式显示原始输入
+        if raw_input:
+            try:
+                # 使用replace错误处理策略，用?替换无法解码的字符
+                displayed_input = raw_input.decode('utf-8', errors='replace').rstrip('\n\r')
+            except:
+                try:
+                    # 尝试GBK编码
+                    displayed_input = raw_input.decode('gbk', errors='replace').rstrip('\n\r')
+                except:
+                    displayed_input = None
+        
+        # 用红色重新显示提示符和用户输入
         if displayed_input:
-            # 有内容就显示内容
             colored_print(f"{prompt}{displayed_input}", 'system_error')
         else:
-            # 没有内容就显示占位符
             colored_print(f"{prompt}[编码错误，输入内容无法显示]", 'system_error')
         
         colored_print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
