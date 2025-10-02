@@ -186,9 +186,6 @@ def main():
             # 获取用户输入（使用安全输入函数）
             user_input = colored_input(f"\n{SYMBOLS['user']} 您{status}: ", 'user_text')
             
-            # 用户输入提示显示完成后，再显示电池信息
-            battery_monitor.refresh_now()
-            
             # 用绿色重新显示用户输入的完整内容（覆盖白色输入）
             if user_input.strip():  # 只有非空输入才重新显示
                 # 清除上一行并重新以绿色显示
@@ -248,9 +245,6 @@ def main():
             # 发送消息并获取流式回复
             # 确保在新行开始显示动画，避免与用户输入重合
             print()  # 换行，将动画显示在新行
-            
-            # 豆包开始流式传输时隐藏电池显示
-            battery_monitor.hide_display()
             
             # 启动等待动画
             stop_animation = threading.Event()
