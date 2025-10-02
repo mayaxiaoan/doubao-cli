@@ -285,7 +285,7 @@ def main():
                                 stop_animation.set()
                                 time.sleep(0.15)
                                 first_chunk_received = True
-                            colored_print(f"\n{SYMBOLS['thinking']} 深度思考中...{thinking_status}", 'bot_thinking')
+                            colored_print(f"\n{SYMBOLS['thinking']} 深度思考中...{thinking_status}", 'separator_line')
                             colored_print(f"{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}", 'separator_line')
                             reasoning_displayed = True
                         colored_print(chunk_data['reasoning'], 'bot_thinking', end="", flush=True)

@@ -90,7 +90,7 @@ class BatteryMonitor:
         """根据电量获取TTY颜色"""
         if level < 20:
             return '\033[31m'  # 红色
-        elif level < 50:
+        elif level < 40:
             return '\033[33m'  # 黄色
         else:
             return '\033[32m'  # 绿色
