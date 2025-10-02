@@ -99,12 +99,12 @@ class BatteryMonitor:
         """在TTY上显示电池信息"""
         level = self.get_battery_status()
         
-        # 准备电池信息文本 - 使用新格式 pow[98%]
+        # 准备电池信息文本 - 使用新格式 Pow[98%]
         if self.is_desktop:
-            battery_text = "pow[100%]"
+            battery_text = "Pow[100%]"
             color = '\033[33m'  # 默认黄色
         else:
-            battery_text = f"pow[{level}%]"
+            battery_text = f"Pow[{level}%]"
             color = self._get_battery_color(level)
         
         # TTY颜色重置
@@ -114,16 +114,25 @@ class BatteryMonitor:
         try:
             # 直接写入TTY设备
             with open(self.tty_device, 'w') as tty_file:
-                # 移动到指定位置 (1, 116) - 向左偏移4个字符
-                tty_file.write("\033[1;116H")
+                # 计算需要补的空格数量，确保右对齐
+                max_length = 9  # Pow[100%]的最大长度
+                padding_spaces = max_length - len(battery_text)
+                padded_text = " " * padding_spaces + battery_text
                 
-                # 先清除该位置的内容
-                tty_file.write(" " * 12)  # 增加清除长度，因为pow[100%]比⚡[100%]长
-                
-                # 再次移动到相同位置并显示电池信息
-                tty_file.write("\033[1;116H")
-                tty_file.write(display_text)
-                tty_file.flush()
+                # 逐字显示电池信息，实现淡入效果
+                for i in range(len(padded_text) + 1):
+                    # 移动到起始位置 (1, 116)
+                    tty_file.write("\033[1;116H")
+                    
+                    # 显示当前进度（包括空格）
+                    current_text = padded_text[:i]
+                    current_display = f"{color}{current_text}{reset_color}"
+                    tty_file.write(current_display)
+                    tty_file.flush()
+                    
+                    # 如果不是最后一个字符，等待0.1秒
+                    if i < len(padded_text):
+                        time.sleep(0.1)
                 
         except Exception:
             # 如果TTY写入失败，静默忽略
@@ -176,7 +185,7 @@ class BatteryMonitor:
             # 直接写入TTY设备清除
             with open(self.tty_device, 'w') as tty_file:
                 tty_file.write("\033[1;116H")
-                tty_file.write(" " * 12)  # 清除电池信息
+                tty_file.write(" " * 9)  # 清除电池信息（最大长度9个字符）
                 tty_file.flush()
         except Exception:
             # 如果TTY清除失败，静默忽略
