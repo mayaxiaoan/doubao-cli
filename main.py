@@ -96,8 +96,8 @@ def colored_input(prompt, color_key='user_text'):
         user_input = input(colored_prompt)
         return user_input.strip()
     except UnicodeDecodeError as e:
-        print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}")
-        print(f"{SYMBOLS['info']} 这可能是fbterm中文输入法导致的，请重新输入")
+        colored_print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
+        colored_print(f"{SYMBOLS['info']} 这可能是删除字符错误导致的，注意，由于编码显示的问题，你每删除一个汉字要按三次回退键哦，请重新输入", 'system_warning')
         return ""
     except Exception as e:
         print(f"\n{SYMBOLS['warning']} 输入处理错误: {e}")
