@@ -142,21 +142,12 @@ def colored_input(prompt, color_key='user_text'):
         colored_print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
         colored_print(f"{SYMBOLS['info']} 这可能是删除汉字导致的，由于编码显示的问题，你每删除一个汉字实际要按三次回退键哦，记住次数，不要在意显示被删除的文字", 'system_warning')
         
-        # 如果成功清理出有效内容，询问用户是否使用清理后的内容
+        # 如果成功清理出有效内容，自动使用清理后的内容
         if cleaned_input:
-            colored_print(f"\n{SYMBOLS['info']} 已自动清理错误字符，处理后的内容为:", 'system_info')
+            colored_print(f"\n{SYMBOLS['success']} 已自动清理编码错误字符，处理后的内容:", 'system_success')
             colored_print(f"{SYMBOLS['user']} {cleaned_input}", 'bright_green')
-            colored_print(f"{SYMBOLS['info']} 是否使用清理后的内容发送？(y/n): ", 'system_info', end='', flush=True)
-            
-            try:
-                choice = input().strip().lower()
-                if choice in ['y', 'yes', '是', '']:
-                    colored_print(f"{SYMBOLS['success']} 使用清理后的内容继续", 'system_success')
-                    return cleaned_input
-                else:
-                    colored_print(f"{SYMBOLS['info']} 已取消，请重新输入", 'system_info')
-            except:
-                pass
+            # 直接返回清理后的内容，自动继续
+            return cleaned_input
         
         return ""
     except Exception as e:
