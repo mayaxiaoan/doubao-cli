@@ -38,28 +38,35 @@ def test_tty1_positions():
     
     for i, (row, col, description) in enumerate(test_positions):
         try:
-            print(f"\n测试位置 {i+1}: {description} (行{row}, 列{col})")
+            print(f"\n=== 准备测试位置 {i+1}: {description} (行{row}, 列{col}) ===")
+            print("fbterm提示：即将在tty1上显示测试信息...")
+            print("请观察屏幕，1秒后将在tty1上显示测试消息")
             
-            # 写入测试消息
+            # 延迟1秒，让fbterm的提示信息先显示
+            time.sleep(1)
+            
+            # 现在在tty1上写入测试消息
             with open(tty1_device, 'w') as tty_file:
                 # 移动到指定位置
                 tty_file.write(f"\033[{row};{col}H")
                 tty_file.write(f"[{i+1}]TTY测试")
                 tty_file.flush()
             
-            print(f"已写入位置 {i+1}: {description}")
-            print("请观察是否能看到测试消息，然后按回车继续...")
+            print(f"✓ 已在tty1位置 {i+1} 显示测试消息")
+            print("请观察是否能看到测试消息...")
+            print("按回车继续下一个测试...")
             
             # 等待用户确认
             input()
             
             # 清除测试消息
+            print("正在清除tty1上的测试消息...")
             with open(tty1_device, 'w') as tty_file:
                 tty_file.write(f"\033[{row};{col}H")
                 tty_file.write(" " * 15)  # 清除消息
                 tty_file.flush()
             
-            print(f"已清除位置 {i+1}")
+            print(f"✓ 已清除位置 {i+1}")
             
         except Exception as e:
             print(f"测试位置 {i+1} 失败: {e}")
@@ -82,26 +89,34 @@ def test_tty1_timing():
     
     for interval in intervals:
         try:
-            print(f"\n测试间隔: {interval}秒")
+            print(f"\n=== 准备测试间隔: {interval}秒 ===")
+            print("fbterm提示：即将在tty1上显示时序测试信息...")
+            print(f"请观察屏幕，1秒后将在tty1上显示 {interval}秒间隔测试")
             
-            # 写入测试消息
+            # 延迟1秒，让fbterm的提示信息先显示
+            time.sleep(1)
+            
+            # 现在在tty1上写入测试消息
             with open(tty1_device, 'w') as tty_file:
                 tty_file.write("\033[24;60H")  # 右下角偏左
                 tty_file.write(f"[{interval}s]时序测试")
                 tty_file.flush()
             
-            print(f"已写入 {interval}秒间隔测试")
+            print(f"✓ 已在tty1上显示 {interval}秒间隔测试")
+            print("请观察是否能看到测试消息...")
             
             # 等待指定时间
+            print(f"等待 {interval} 秒...")
             time.sleep(interval)
             
             # 清除测试消息
+            print("正在清除tty1上的测试消息...")
             with open(tty1_device, 'w') as tty_file:
                 tty_file.write("\033[24;60H")
                 tty_file.write(" " * 15)
                 tty_file.flush()
             
-            print(f"已清除 {interval}秒间隔测试")
+            print(f"✓ 已清除 {interval}秒间隔测试")
             
         except Exception as e:
             print(f"时序测试 {interval}秒 失败: {e}")
