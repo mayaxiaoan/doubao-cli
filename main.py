@@ -11,6 +11,7 @@ import os
 import locale
 from doubao_client import DoubaoClient
 from config import SYMBOLS, COLORS, ENABLE_COLORS, DEFAULT_THINKING_MODE
+from battery_monitor import battery_monitor
 
 
 def setup_encoding():
@@ -109,13 +110,27 @@ def safe_print(text, end='\n', flush=False):
         if isinstance(text, bytes):
             text = text.decode('utf-8', errors='replace')
         print(text, end=end, flush=flush)
+        
+        # 如果输出包含换行，立即刷新电池显示位置
+        if end == '\n' or '\n' in text:
+            battery_monitor.refresh_now()
+            
     except UnicodeEncodeError as e:
         # 如果仍有编码问题，使用ASCII模式
         safe_text = text.encode('ascii', errors='replace').decode('ascii')
         print(safe_text, end=end, flush=flush)
         print(f"{SYMBOLS['warning']} 字符编码问题已处理: {e}")
+        
+        # 刷新电池显示
+        if end == '\n' or '\n' in safe_text:
+            battery_monitor.refresh_now()
+            
     except Exception as e:
         print(f"输出错误: {e}", end=end, flush=flush)
+        
+        # 刷新电池显示
+        if end == '\n':
+            battery_monitor.refresh_now()
 
 
 def colored_print(text, color_key='reset', end='\n', flush=False):
@@ -140,6 +155,9 @@ def main():
     """主函数"""
     # 首先设置编码环境
     encoding_ok = setup_encoding()
+    
+    # 启动电池监控显示
+    battery_monitor.start_display()
     
     colored_print(f"{SYMBOLS['separator']}" * 70, 'separator_line')
     colored_print(f"    {SYMBOLS['star']} 我是制杖但勤劳的豆包AI (支持上下文对话 + 深度思考控制) {SYMBOLS['star']}", 'bright_white')
@@ -191,6 +209,9 @@ def main():
             # 检查退出命令
             if user_input.lower() in ['exit', 'quit', '退出']:
                 colored_print(f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！", 'system_info')
+                # 停止电池监控
+                battery_monitor.stop_display()
+                battery_monitor.clear_display()
                 break
             
             # 检查清空历史命令
@@ -237,6 +258,7 @@ def main():
             # 发送消息并获取流式回复
             # 确保在新行开始显示动画，避免与用户输入重合
             print()  # 换行，将动画显示在新行
+            battery_monitor.refresh_now()  # 换行后立即刷新电池显示
             
             # 启动等待动画
             stop_animation = threading.Event()
@@ -323,6 +345,7 @@ def main():
                 # 换行准备下一轮对话
                 if first_chunk_received:  # 只有收到内容时才换行
                     print()
+                    battery_monitor.refresh_now()  # 换行后立即刷新电池显示
                 
                 # 检查是否有完整回复
                 if not response_chunks:
@@ -344,6 +367,9 @@ def main():
         colored_print(f"{SYMBOLS['docs']} 请检查config.py文件，确保已正确填写API密钥信息", 'system_info')
     except KeyboardInterrupt:
         colored_print(f"\n\n{SYMBOLS['goodbye']} 程序被用户中断，再见！", 'system_info')
+        # 停止电池监控
+        battery_monitor.stop_display()
+        battery_monitor.clear_display()
         # 确保所有线程正常退出
         sys.exit(0)
     except Exception as e:
