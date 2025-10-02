@@ -75,18 +75,63 @@ class BatteryMonitor:
                 else:
                     return 100, False
             
-            # 读取充电状态
-            status_file = os.path.join(self.battery_path, 'status')
-            is_charging = False
-            if os.path.exists(status_file):
-                with open(status_file, 'r') as f:
-                    status = f.read().strip().lower()
-                    is_charging = status == 'charging'
+            # 读取充电状态 - 针对MacBook优化
+            is_charging = self._detect_charging_status()
             
             return level, is_charging
             
         except (IOError, ValueError, ZeroDivisionError):
             return 100, False
+    
+    def _detect_charging_status(self):
+        """检测充电状态 - 针对MacBook Air 2010优化"""
+        if not self.battery_path:
+            return False
+        
+        # 方法1: 读取电池status文件
+        status_file = os.path.join(self.battery_path, 'status')
+        if os.path.exists(status_file):
+            try:
+                with open(status_file, 'r') as f:
+                    status = f.read().strip().lower()
+                    # MacBook的Full状态也应该显示为充电中
+                    if status in ['charging', 'full']:
+                        return True
+            except:
+                pass
+        
+        # 方法2: 检查AC适配器状态（MacBook Air 2010使用ADP1）
+        ac_paths = [
+            '/sys/class/power_supply/ADP1',  # MacBook常见路径
+            '/sys/class/power_supply/AC',
+            '/sys/class/power_supply/ac'
+        ]
+        
+        for ac_path in ac_paths:
+            if os.path.exists(ac_path):
+                online_file = os.path.join(ac_path, 'online')
+                if os.path.exists(online_file):
+                    try:
+                        with open(online_file, 'r') as f:
+                            online = f.read().strip()
+                            if online == '1':
+                                return True
+                    except:
+                        pass
+        
+        # 方法3: 检查充电电流（备用方法）
+        current_file = os.path.join(self.battery_path, 'current_now')
+        if os.path.exists(current_file):
+            try:
+                with open(current_file, 'r') as f:
+                    current = int(f.read().strip())
+                    # 如果电流为正数，表示正在充电
+                    if current > 0:
+                        return True
+            except:
+                pass
+        
+        return False
     
     def get_battery_status(self):
         """获取电池状态信息"""
@@ -109,14 +154,14 @@ class BatteryMonitor:
             return COLORS.get('bright_white', '\033[97m')  # 其他情况显示白色
     
     def _display_battery_info(self):
-        """在右上角显示电池信息"""
+        """在右下角显示电池信息"""
         level, charging = self.get_battery_status()
         
-        # 获取终端宽度
+        # 获取终端尺寸
         try:
-            terminal_width = os.get_terminal_size().columns
+            terminal_width, terminal_height = os.get_terminal_size().columns, os.get_terminal_size().lines
         except:
-            terminal_width = 80
+            terminal_width, terminal_height = 80, 24
         
         # 准备电池信息文本 - 使用新格式 ⚡[98%]
         if self.is_desktop:
@@ -126,19 +171,28 @@ class BatteryMonitor:
             battery_text = f"⚡[{level}%]"
             color = self._get_battery_color(level, charging)
         
-        # 计算显示位置（右上角，始终靠右对齐）
+        # 计算显示位置（右下角，始终靠右对齐）
         reset_color = COLORS.get('reset', '\033[0m')
         display_text = f"{color}{battery_text}{reset_color}"
         
         # 保存当前光标位置
         sys.stdout.write("\033[s")
         
-        # 移动到右上角位置，确保靠右对齐
         # 计算文本长度（考虑ANSI颜色代码不占用显示宽度）
+        # 关键修复：确保文本不会超出终端边界
         text_length = len(battery_text)  # 只计算实际显示字符长度
-        move_cursor = f"\033[1;{terminal_width - text_length + 1}H"
         
-        # 输出电池信息
+        # 移动到右下角位置，确保不会换行
+        # 使用更保守的方法：预留更多空间，确保不会换行
+        max_text_length = 8  # 预留更多空间，避免边界问题
+        # 关键修复：确保位置不会超出终端边界
+        target_col = max(1, terminal_width - max_text_length)
+        move_cursor = f"\033[{terminal_height};{target_col}H"
+        
+        # 先清除该位置的内容（用空格覆盖最大长度）
+        sys.stdout.write(f"{move_cursor}{' ' * max_text_length}")
+        
+        # 再次移动到相同位置并显示电池信息
         sys.stdout.write(f"{move_cursor}{display_text}")
         
         # 恢复光标位置
@@ -162,6 +216,14 @@ class BatteryMonitor:
             # 忽略刷新错误
             pass
     
+    def hide_display(self):
+        """隐藏电池显示"""
+        try:
+            self.clear_display()
+        except Exception:
+            # 忽略清除错误
+            pass
+    
     def stop_display(self):
         """停止显示电池信息"""
         self.stop_event.set()
@@ -181,13 +243,14 @@ class BatteryMonitor:
     def clear_display(self):
         """清除电池显示"""
         try:
-            terminal_width = os.get_terminal_size().columns
+            terminal_width, terminal_height = os.get_terminal_size().columns, os.get_terminal_size().lines
             # 保存当前光标位置
             sys.stdout.write("\033[s")
-            # 移动到右上角并清除（清除最大可能的文本长度）
-            # ⚡[100%] 最长7个字符
-            move_cursor = f"\033[1;{terminal_width - 7}H"
-            sys.stdout.write(f"{move_cursor}{' ' * 7}")
+            # 移动到右下角并清除（清除最大可能的文本长度）
+            # 预留8个字符空间，避免边界问题
+            target_col = max(1, terminal_width - 8)
+            move_cursor = f"\033[{terminal_height};{target_col}H"
+            sys.stdout.write(f"{move_cursor}{' ' * 8}")
             # 恢复光标位置
             sys.stdout.write("\033[u")
             sys.stdout.flush()
