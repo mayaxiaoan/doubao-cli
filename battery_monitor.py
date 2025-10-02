@@ -114,14 +114,14 @@ class BatteryMonitor:
         try:
             # 直接写入TTY设备
             with open(self.tty_device, 'w') as tty_file:
-                # 移动到指定位置 (1, 120) - 更接近右上角
-                tty_file.write("\033[1;120H")
+                # 移动到指定位置 (1, 116) - 向左偏移4个字符
+                tty_file.write("\033[1;116H")
                 
                 # 先清除该位置的内容
                 tty_file.write(" " * 12)  # 增加清除长度，因为pow[100%]比⚡[100%]长
                 
                 # 再次移动到相同位置并显示电池信息
-                tty_file.write("\033[1;120H")
+                tty_file.write("\033[1;116H")
                 tty_file.write(display_text)
                 tty_file.flush()
                 
@@ -175,7 +175,7 @@ class BatteryMonitor:
         try:
             # 直接写入TTY设备清除
             with open(self.tty_device, 'w') as tty_file:
-                tty_file.write("\033[1;120H")
+                tty_file.write("\033[1;116H")
                 tty_file.write(" " * 12)  # 清除电池信息
                 tty_file.flush()
         except Exception:
