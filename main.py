@@ -7,11 +7,10 @@ import threading
 import time
 import sys
 import os
-import tty
-import termios
 from doubao_client import DoubaoClient
 from config import SYMBOLS, COLORS, ENABLE_COLORS, DEFAULT_THINKING_MODE
 from battery_monitor import battery_monitor
+from input_handler import safe_input
 
 
 
@@ -66,26 +65,6 @@ def waiting_animation(stop_event):
     print(f'\r{colored_prefix}', end='', flush=True)
 
 
-def getch():
-    """读取单个按键（无需按Enter）"""
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(sys.stdin.fileno())
-        ch = sys.stdin.read(1)
-        # 检查是否是Esc键或特殊键序列
-        if ch == '\x1b':  # Esc键
-            # 尝试读取可能的后续字符（如方向键）
-            sys.stdin.read(2)  # 清空可能的额外字符
-            return 'esc'
-        elif ch == '\r' or ch == '\n':  # Enter键
-            return 'enter'
-        else:
-            return ch
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-
 def colored_print(text, color_key='reset', end='\n', flush=False):
     """带颜色的安全打印函数"""
     if ENABLE_COLORS and color_key in COLORS:
@@ -107,105 +86,12 @@ def colored_print(text, color_key='reset', end='\n', flush=False):
             print(ascii_text, end=end, flush=flush)
 
 
-# 全局标志：记录是否已经显示过编码错误提示
-_encoding_error_tip_shown = False
-
-
 def colored_input(prompt, color_key='user_text'):
-    """带颜色的安全输入函数"""
-    global _encoding_error_tip_shown
-    
-    if ENABLE_COLORS and color_key in COLORS:
-        colored_prompt = f"{COLORS[color_key]}{prompt}{COLORS['reset']}"
-    else:
-        colored_prompt = prompt
-    
-    # 先打印提示符
-    print(colored_prompt, end='', flush=True)
-    
-    # 存储用户实际输入的原始字节数据
-    raw_input = None
-    displayed_input = None
-    
-    try:
-        # 尝试从stdin.buffer读取原始字节
-        if hasattr(sys.stdin, 'buffer'):
-            raw_input = sys.stdin.buffer.readline()
-            # 尝试解码
-            user_input = raw_input.decode('utf-8').rstrip('\n\r')
-            return user_input.strip()
-        else:
-            # 如果没有buffer属性，使用常规方式
-            user_input = sys.stdin.readline().rstrip('\n\r')
-            return user_input.strip()
-    except UnicodeDecodeError as e:
-        # 当发生编码错误时，我们有原始字节数据
-        print(f"\033[1A\033[2K", end="")  # 向上一行并清除
-        
-        # 尝试用不同的方式显示原始输入
-        displayed_input = None
-        cleaned_input = None
-        
-        if raw_input:
-            try:
-                # 使用replace错误处理策略，用�替换无法解码的字符
-                displayed_input = raw_input.decode('utf-8', errors='replace').rstrip('\n\r')
-                # 创建清理后的版本，移除所有替换字符（�）
-                cleaned_input = displayed_input.replace('\ufffd', '').strip()
-            except:
-                try:
-                    # 尝试GBK编码
-                    displayed_input = raw_input.decode('gbk', errors='replace').rstrip('\n\r')
-                    cleaned_input = displayed_input.replace('\ufffd', '').strip()
-                except:
-                    displayed_input = None
-                    cleaned_input = None
-        
-        # 用红色重新显示提示符和用户输入
-        if displayed_input:
-            colored_print(f"{prompt}{displayed_input}", 'system_error')
-        else:
-            colored_print(f"{prompt}[编码错误，输入内容无法显示]", 'system_error')
-        
-        colored_print(f"{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
-        
-        # 只在第一次显示详细提示
-        if not _encoding_error_tip_shown:
-            colored_print(f"{SYMBOLS['info']} 这可能是删除汉字导致的，由于编码显示的问题，你每删除一个汉字实际要按三次回退键哦，记住次数，不要在意显示被删除的文字", 'system_warning')
-            _encoding_error_tip_shown = True
-        
-        # 如果成功清理出有效内容，询问用户是否使用清理后的内容
-        if cleaned_input:
-            colored_print(f"{SYMBOLS['info']} 已自动清理错误字符，处理后的内容为:", 'system_info')
-            colored_print(f"{SYMBOLS['user']} {cleaned_input}", 'bright_green')
-            colored_print(f"{SYMBOLS['info']} 按 Enter 确认发送，按任意其他键取消", 'system_info')
-            
-            try:
-                key = getch()
-                if key == 'enter':
-                    colored_print(f"{SYMBOLS['success']} 使用清理后的内容继续", 'system_success')
-                    return cleaned_input
-                else:
-                    # 任意其他按键都视为取消
-                    colored_print(f"{SYMBOLS['info']} 已取消，请重新输入", 'system_info')
-            except Exception as ex:
-                # 如果getch失败，回退到传统方式
-                colored_print(f"{SYMBOLS['info']} (输入 y 确认，其他键取消): ", 'system_info', end='', flush=True)
-                try:
-                    choice = input().strip().lower()
-                    if choice in ['y', 'yes', '是', '']:
-                        colored_print(f"{SYMBOLS['success']} 使用清理后的内容继续", 'system_success')
-                        return cleaned_input
-                    else:
-                        colored_print(f"{SYMBOLS['info']} 已取消，请重新输入", 'system_info')
-                except:
-                    pass
-        
-        return ""
-    except Exception as e:
-        print(f"\n{SYMBOLS['warning']} 输入处理错误: {e}")
-        print(f"{SYMBOLS['info']} 请重新输入")
-        return ""
+    """
+    带颜色的安全输入函数
+    封装了编码错误自动修复功能
+    """
+    return safe_input(prompt, colored_print, SYMBOLS, COLORS, ENABLE_COLORS)
 
 
 def main():
