@@ -92,13 +92,28 @@ def colored_input(prompt, color_key='user_text'):
     else:
         colored_prompt = prompt
     
+    # 存储用户实际输入的原始显示（包括可能的编码错误字符）
+    displayed_input = None
+    
     try:
-        user_input = input(colored_prompt)
+        # 先打印提示符
+        print(colored_prompt, end='', flush=True)
+        # 然后读取用户输入
+        user_input = sys.stdin.readline().rstrip('\n\r')
+        displayed_input = user_input  # 保存显示的内容
         return user_input.strip()
     except UnicodeDecodeError as e:
-        # 当发生编码错误时，清除上一行并用红色重新显示用户输入
-        print(f"\033[1A\033[2K", end="")
-        colored_print(f"{SYMBOLS['user']} 您: [编码错误，输入内容无法正确显示]", 'system_error')
+        # 当发生编码错误时，清除上一行并用红色重新显示
+        print(f"\033[1A\033[2K", end="")  # 向上一行并清除
+        
+        # 用红色重新显示提示符和用户输入（如果有）
+        if displayed_input:
+            # 有内容就显示内容
+            colored_print(f"{prompt}{displayed_input}", 'system_error')
+        else:
+            # 没有内容就显示占位符
+            colored_print(f"{prompt}[编码错误，输入内容无法显示]", 'system_error')
+        
         colored_print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
         colored_print(f"{SYMBOLS['info']} 这可能是删除汉字导致的，由于编码显示的问题，你每删除一个汉字实际要按三次回退键哦，记住次数，不要在意显示被删除的文字", 'system_warning')
         return ""
