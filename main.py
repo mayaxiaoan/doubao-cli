@@ -7,9 +7,29 @@ import threading
 import time
 import sys
 import os
+import datetime
 from doubao_client import DoubaoClient
 from config import SYMBOLS, COLORS, ENABLE_COLORS, DEFAULT_THINKING_MODE
 from battery_monitor import battery_monitor
+
+# 创建调试日志文件
+DEBUG_LOG_FILE = "debug_utf8_fix.log"
+
+def debug_log(message, data=None):
+    """记录调试信息到文件"""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    log_entry = f"[{timestamp}] {message}"
+    
+    if data is not None:
+        log_entry += f" | 数据: {repr(data)}"
+    
+    log_entry += "\n"
+    
+    try:
+        with open(DEBUG_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(log_entry)
+    except Exception as e:
+        print(f"日志写入失败: {e}")
 
 
 def setup_encoding():
@@ -29,69 +49,143 @@ def fix_fbterm_encoding(text):
     if not text:
         return text
     
+    debug_log("开始fix_fbterm_encoding", {"输入文本": text})
+    
     try:
         # 检查是否包含无效的UTF-8序列
         text.encode('utf-8').decode('utf-8')
+        debug_log("fix_fbterm_encoding检测通过", {"无需修复"})
         return text
-    except UnicodeDecodeError:
+    except UnicodeDecodeError as e:
+        debug_log("fix_fbterm_encoding检测到问题", {"错误": str(e)})
         # 使用替换策略修复截断的UTF-8字节序列
         fixed_text = text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+        debug_log("fix_fbterm_encoding修复完成", {"修复后": fixed_text})
         return fixed_text
+
+
+def test_utf8_scenarios():
+    """测试各种UTF-8编码场景"""
+    debug_log("开始UTF-8测试场景")
+    
+    test_cases = [
+        "你好世界",
+        "Hello World",
+        "测试中文123",
+        "混合内容：中文English123",
+        "特殊字符：！@#￥%……&*（）",
+    ]
+    
+    for i, test_text in enumerate(test_cases):
+        debug_log(f"测试案例 {i+1}", {"原始文本": test_text})
+        
+        # 模拟截断
+        try:
+            # 将文本转换为字节，然后截断
+            text_bytes = test_text.encode('utf-8')
+            debug_log(f"测试案例 {i+1} 字节序列", {"长度": len(text_bytes), "字节": list(text_bytes)})
+            
+            # 模拟截断到不同位置
+            for truncate_pos in range(1, min(len(text_bytes) + 1, 10)):
+                truncated_bytes = text_bytes[:truncate_pos]
+                try:
+                    truncated_text = truncated_bytes.decode('utf-8')
+                    debug_log(f"测试案例 {i+1} 截断位置 {truncate_pos}", {"成功解码": truncated_text})
+                except UnicodeDecodeError as e:
+                    debug_log(f"测试案例 {i+1} 截断位置 {truncate_pos}", {"解码失败": str(e)})
+                    
+                    # 测试修复
+                    try:
+                        fixed_text = truncated_bytes.decode('utf-8', errors='replace')
+                        debug_log(f"测试案例 {i+1} 截断位置 {truncate_pos} 修复", {"修复结果": fixed_text})
+                    except Exception as fix_e:
+                        debug_log(f"测试案例 {i+1} 截断位置 {truncate_pos} 修复失败", {"错误": str(fix_e)})
+                        
+        except Exception as e:
+            debug_log(f"测试案例 {i+1} 处理失败", {"错误": str(e)})
+    
+    debug_log("UTF-8测试场景完成")
 
 
 def smart_fix_utf8_sequence(text, error_msg):
     """智能修复UTF-8序列 - 基于错误信息进行精确修复"""
     import re
     
+    debug_log("开始智能修复", {"原始文本长度": len(text), "错误信息": error_msg})
+    
     # 解析错误信息，提取位置信息
-    # 例如: "utf-8' codec can't decode byte 0xe5 in position 33: unexpected end of data"
-    position_match = re.search(r'position (\d+)', error_msg)
+    # 支持单个位置和范围位置，如: "position 33" 或 "position 12-13"
+    position_match = re.search(r'position (\d+(?:-\d+)?)', error_msg)
     if not position_match:
+        debug_log("无法解析位置信息")
         return text  # 无法解析位置信息，返回原文本
     
-    error_position = int(position_match.group(1))
+    position_str = position_match.group(1)
+    debug_log("解析到位置信息", position_str)
+    
+    # 处理位置范围
+    if '-' in position_str:
+        start_pos, end_pos = map(int, position_str.split('-'))
+        error_position = start_pos
+        debug_log("位置范围", {"开始": start_pos, "结束": end_pos})
+    else:
+        error_position = int(position_str)
+        debug_log("单个位置", error_position)
     
     # 将字符串转换为字节序列进行处理
     try:
         # 尝试将字符串编码为字节
         text_bytes = text.encode('latin-1')  # 使用latin-1确保不会丢失任何字节
-    except:
+        debug_log("转换为字节序列", {"长度": len(text_bytes), "前20个字节": list(text_bytes[:20])})
+    except Exception as e:
+        debug_log("字节转换失败", str(e))
         return text  # 如果无法编码，返回原文本
     
     # 检查错误位置是否在有效范围内
     if error_position >= len(text_bytes):
+        debug_log("错误位置超出范围", {"错误位置": error_position, "字节序列长度": len(text_bytes)})
         return text
+    
+    debug_log("错误位置字节值", {"位置": error_position, "字节值": text_bytes[error_position], "十六进制": f"0x{text_bytes[error_position]:02x}"})
     
     # 尝试修复截断的UTF-8序列
     fixed_bytes = bytearray(text_bytes)
+    original_length = len(fixed_bytes)
+    
+    debug_log("开始修复", {"起始位置": error_position})
     
     # 从错误位置开始，尝试修复
     for i in range(error_position, len(fixed_bytes)):
         byte_val = fixed_bytes[i]
+        debug_log(f"检查位置 {i}", {"字节值": byte_val, "十六进制": f"0x{byte_val:02x}"})
         
         # 检查是否是UTF-8多字节序列的开始
         if byte_val >= 0xC0:  # 2字节序列开始
-            # 移除不完整的2字节序列
+            debug_log("发现2字节序列开始", {"截断位置": i})
             fixed_bytes = fixed_bytes[:i]
             break
         elif byte_val >= 0xE0:  # 3字节序列开始
-            # 移除不完整的3字节序列
+            debug_log("发现3字节序列开始", {"截断位置": i})
             fixed_bytes = fixed_bytes[:i]
             break
         elif byte_val >= 0xF0:  # 4字节序列开始
-            # 移除不完整的4字节序列
+            debug_log("发现4字节序列开始", {"截断位置": i})
             fixed_bytes = fixed_bytes[:i]
             break
         elif byte_val >= 0x80:  # 多字节序列的延续字节
-            # 移除不完整的延续字节
+            debug_log("发现延续字节", {"截断位置": i})
             fixed_bytes = fixed_bytes[:i]
             break
+    
+    debug_log("修复完成", {"修复后长度": len(fixed_bytes), "原长度": original_length})
     
     # 将修复后的字节序列转换回字符串
     try:
         fixed_text = fixed_bytes.decode('utf-8', errors='replace')
+        debug_log("修复后文本", {"内容": fixed_text, "长度": len(fixed_text)})
         return fixed_text
-    except:
+    except Exception as e:
+        debug_log("字节序列解码失败", str(e))
         return text  # 如果修复失败，返回原文本
 
 
@@ -161,22 +255,29 @@ def colored_input(prompt, color_key='user_text'):
         
         # 专门处理fbterm中文输入法导致的UTF-8字节截断问题
         if isinstance(user_input, str):
+            debug_log("用户输入检测", {"类型": "str", "长度": len(user_input), "内容": user_input})
+            
             # 检查字符串是否包含无效的UTF-8序列
             try:
                 # 尝试重新编码来检测无效序列
                 user_input.encode('utf-8').decode('utf-8')
+                debug_log("编码检测通过，无需修复")
             except UnicodeDecodeError as e:
                 # 捕获具体的错误信息进行精确修复
                 error_msg = str(e)
                 print(f"\n{SYMBOLS['warning']} 检测到输入编码问题: {error_msg}")
+                debug_log("开始智能修复流程", {"错误信息": error_msg})
                 
                 # 尝试智能修复截断的UTF-8序列
                 fixed_input = smart_fix_utf8_sequence(user_input, error_msg)
+                debug_log("智能修复结果", {"修复后内容": fixed_input})
+                
                 if fixed_input != user_input:
                     print(f"{SYMBOLS['success']} 已自动修复编码问题")
                     user_input = fixed_input
                 else:
                     # 如果智能修复失败，使用替换策略
+                    debug_log("智能修复无效，使用替换策略")
                     user_input = user_input.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
                     print(f"{SYMBOLS['warning']} 使用替换策略修复编码问题")
         
@@ -204,6 +305,12 @@ def colored_input(prompt, color_key='user_text'):
 
 def main():
     """主函数"""
+    # 初始化调试日志
+    debug_log("程序启动", {"时间": datetime.datetime.now().isoformat()})
+    
+    # 运行UTF-8测试场景
+    test_utf8_scenarios()
+    
     setup_encoding()
     battery_monitor.start_display()
     
@@ -248,8 +355,12 @@ def main():
             # 获取用户输入
             user_input = colored_input(f"\n{SYMBOLS['user']} 您{status}: ", 'user_text')
             
+            # 记录用户输入
+            debug_log("用户输入完成", {"输入内容": user_input, "对话状态": status})
+            
             # 修复fbterm中文输入法可能的编码问题
             user_input = fix_fbterm_encoding(user_input)
+            debug_log("编码修复后", {"修复后内容": user_input})
             
             # 重新显示用户输入
             if user_input.strip():
