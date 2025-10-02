@@ -96,8 +96,9 @@ def colored_input(prompt, color_key='user_text'):
         user_input = input(colored_prompt)
         return user_input.strip()
     except UnicodeDecodeError as e:
-        # 显示用户输入的内容（用红色标识有编码问题）
-        colored_print(f"\n{SYMBOLS['user']} 您: [输入内容因编码错误无法正确显示]", 'system_error')
+        # 当发生编码错误时，清除上一行并用红色重新显示用户输入
+        print(f"\033[1A\033[2K", end="")
+        colored_print(f"{SYMBOLS['user']} 您: [编码错误，输入内容无法正确显示]", 'system_error')
         colored_print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
         colored_print(f"{SYMBOLS['info']} 这可能是删除汉字导致的，由于编码显示的问题，你每删除一个汉字实际要按三次回退键哦，记住次数，不要在意显示被删除的文字", 'system_warning')
         return ""
