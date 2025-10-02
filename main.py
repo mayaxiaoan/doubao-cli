@@ -297,6 +297,7 @@ def colored_input(prompt, color_key='user_text'):
     else:
         colored_prompt = prompt
     
+    user_input = None  # 初始化变量
     try:
         debug_log("colored_input 准备获取输入", {"提示内容": colored_prompt})
         user_input = input(colored_prompt)
@@ -373,12 +374,12 @@ def colored_input(prompt, color_key='user_text'):
         return result
         
     except UnicodeDecodeError as e:
-        debug_log("colored_input UnicodeDecodeError", {"错误": str(e), "输入内容": user_input})
+        debug_log("colored_input UnicodeDecodeError", {"错误": str(e), "输入内容": user_input if user_input is not None else "None"})
         print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}")
         print(f"{SYMBOLS['info']} 这可能是fbterm中文输入法导致的，请重新输入")
         return ""
     except Exception as e:
-        debug_log("colored_input 异常", {"错误": str(e), "异常类型": type(e).__name__, "输入内容": user_input})
+        debug_log("colored_input 异常", {"错误": str(e), "异常类型": type(e).__name__, "输入内容": user_input if user_input is not None else "None"})
         print(f"\n{SYMBOLS['warning']} 输入处理错误: {e}")
         print(f"{SYMBOLS['info']} 请重新输入")
         return ""
