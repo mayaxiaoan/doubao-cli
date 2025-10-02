@@ -282,13 +282,17 @@ def colored_print(text, color_key='reset', end='\n', flush=False):
 
 def colored_input(prompt, color_key='user_text'):
     """带颜色的安全输入函数 - 专门处理fbterm中文输入法问题"""
+    debug_log("colored_input 开始", {"提示": prompt, "颜色键": color_key})
+    
     if ENABLE_COLORS and color_key in COLORS:
         colored_prompt = f"{COLORS[color_key]}{prompt}{COLORS['reset']}"
     else:
         colored_prompt = prompt
     
     try:
+        debug_log("colored_input 准备获取输入", {"提示内容": colored_prompt})
         user_input = input(colored_prompt)
+        debug_log("colored_input 获取到原始输入", {"原始输入": user_input, "长度": len(user_input) if user_input else 0})
         
         # 专门处理fbterm中文输入法导致的UTF-8字节截断问题
         if isinstance(user_input, str):
@@ -356,13 +360,17 @@ def colored_input(prompt, color_key='user_text'):
                 user_input = user_input.decode('utf-8', errors='replace')
                 print(f"{SYMBOLS['success']} 已自动修复字节编码问题")
         
-        return user_input.strip()
+        result = user_input.strip()
+        debug_log("colored_input 准备返回", {"返回值": result, "长度": len(result) if result else 0})
+        return result
         
     except UnicodeDecodeError as e:
+        debug_log("colored_input UnicodeDecodeError", {"错误": str(e), "输入内容": user_input})
         print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}")
         print(f"{SYMBOLS['info']} 这可能是fbterm中文输入法导致的，请重新输入")
         return ""
     except Exception as e:
+        debug_log("colored_input 异常", {"错误": str(e), "异常类型": type(e).__name__, "输入内容": user_input})
         print(f"\n{SYMBOLS['warning']} 输入处理错误: {e}")
         print(f"{SYMBOLS['info']} 请重新输入")
         return ""
