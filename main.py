@@ -39,6 +39,62 @@ def fix_fbterm_encoding(text):
         return fixed_text
 
 
+def smart_fix_utf8_sequence(text, error_msg):
+    """智能修复UTF-8序列 - 基于错误信息进行精确修复"""
+    import re
+    
+    # 解析错误信息，提取位置信息
+    # 例如: "utf-8' codec can't decode byte 0xe5 in position 33: unexpected end of data"
+    position_match = re.search(r'position (\d+)', error_msg)
+    if not position_match:
+        return text  # 无法解析位置信息，返回原文本
+    
+    error_position = int(position_match.group(1))
+    
+    # 将字符串转换为字节序列进行处理
+    try:
+        # 尝试将字符串编码为字节
+        text_bytes = text.encode('latin-1')  # 使用latin-1确保不会丢失任何字节
+    except:
+        return text  # 如果无法编码，返回原文本
+    
+    # 检查错误位置是否在有效范围内
+    if error_position >= len(text_bytes):
+        return text
+    
+    # 尝试修复截断的UTF-8序列
+    fixed_bytes = bytearray(text_bytes)
+    
+    # 从错误位置开始，尝试修复
+    for i in range(error_position, len(fixed_bytes)):
+        byte_val = fixed_bytes[i]
+        
+        # 检查是否是UTF-8多字节序列的开始
+        if byte_val >= 0xC0:  # 2字节序列开始
+            # 移除不完整的2字节序列
+            fixed_bytes = fixed_bytes[:i]
+            break
+        elif byte_val >= 0xE0:  # 3字节序列开始
+            # 移除不完整的3字节序列
+            fixed_bytes = fixed_bytes[:i]
+            break
+        elif byte_val >= 0xF0:  # 4字节序列开始
+            # 移除不完整的4字节序列
+            fixed_bytes = fixed_bytes[:i]
+            break
+        elif byte_val >= 0x80:  # 多字节序列的延续字节
+            # 移除不完整的延续字节
+            fixed_bytes = fixed_bytes[:i]
+            break
+    
+    # 将修复后的字节序列转换回字符串
+    try:
+        fixed_text = fixed_bytes.decode('utf-8', errors='replace')
+        return fixed_text
+    except:
+        return text  # 如果修复失败，返回原文本
+
+
 def waiting_animation(stop_event):
     """显示等待动画"""
     spinners = SYMBOLS['spinner']
@@ -109,19 +165,30 @@ def colored_input(prompt, color_key='user_text'):
             try:
                 # 尝试重新编码来检测无效序列
                 user_input.encode('utf-8').decode('utf-8')
-            except UnicodeDecodeError:
-                # 如果发现无效序列，使用替换策略修复
-                user_input = user_input.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
-                print(f"\n{SYMBOLS['warning']} 检测到输入编码问题，已自动修复")
+            except UnicodeDecodeError as e:
+                # 捕获具体的错误信息进行精确修复
+                error_msg = str(e)
+                print(f"\n{SYMBOLS['warning']} 检测到输入编码问题: {error_msg}")
+                
+                # 尝试智能修复截断的UTF-8序列
+                fixed_input = smart_fix_utf8_sequence(user_input, error_msg)
+                if fixed_input != user_input:
+                    print(f"{SYMBOLS['success']} 已自动修复编码问题")
+                    user_input = fixed_input
+                else:
+                    # 如果智能修复失败，使用替换策略
+                    user_input = user_input.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+                    print(f"{SYMBOLS['warning']} 使用替换策略修复编码问题")
         
         elif isinstance(user_input, bytes):
             # 处理字节输入
             try:
                 user_input = user_input.decode('utf-8')
-            except UnicodeDecodeError:
-                # 对于截断的UTF-8字节序列，使用替换策略
+            except UnicodeDecodeError as e:
+                error_msg = str(e)
+                print(f"\n{SYMBOLS['warning']} 检测到字节编码问题: {error_msg}")
                 user_input = user_input.decode('utf-8', errors='replace')
-                print(f"\n{SYMBOLS['warning']} 检测到字节编码问题，已自动修复")
+                print(f"{SYMBOLS['success']} 已自动修复字节编码问题")
         
         return user_input.strip()
         
