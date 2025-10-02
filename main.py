@@ -115,16 +115,23 @@ def colored_input(prompt, color_key='user_text'):
         print(f"\033[1A\033[2K", end="")  # 向上一行并清除
         
         # 尝试用不同的方式显示原始输入
+        displayed_input = None
+        cleaned_input = None
+        
         if raw_input:
             try:
-                # 使用replace错误处理策略，用?替换无法解码的字符
+                # 使用replace错误处理策略，用�替换无法解码的字符
                 displayed_input = raw_input.decode('utf-8', errors='replace').rstrip('\n\r')
+                # 创建清理后的版本，移除所有替换字符（�）
+                cleaned_input = displayed_input.replace('\ufffd', '').strip()
             except:
                 try:
                     # 尝试GBK编码
                     displayed_input = raw_input.decode('gbk', errors='replace').rstrip('\n\r')
+                    cleaned_input = displayed_input.replace('\ufffd', '').strip()
                 except:
                     displayed_input = None
+                    cleaned_input = None
         
         # 用红色重新显示提示符和用户输入
         if displayed_input:
@@ -134,6 +141,23 @@ def colored_input(prompt, color_key='user_text'):
         
         colored_print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
         colored_print(f"{SYMBOLS['info']} 这可能是删除汉字导致的，由于编码显示的问题，你每删除一个汉字实际要按三次回退键哦，记住次数，不要在意显示被删除的文字", 'system_warning')
+        
+        # 如果成功清理出有效内容，询问用户是否使用清理后的内容
+        if cleaned_input:
+            colored_print(f"\n{SYMBOLS['info']} 已自动清理错误字符，处理后的内容为:", 'system_info')
+            colored_print(f"{SYMBOLS['user']} {cleaned_input}", 'bright_green')
+            colored_print(f"{SYMBOLS['info']} 是否使用清理后的内容发送？(y/n): ", 'system_info', end='', flush=True)
+            
+            try:
+                choice = input().strip().lower()
+                if choice in ['y', 'yes', '是', '']:
+                    colored_print(f"{SYMBOLS['success']} 使用清理后的内容继续", 'system_success')
+                    return cleaned_input
+                else:
+                    colored_print(f"{SYMBOLS['info']} 已取消，请重新输入", 'system_info')
+            except:
+                pass
+        
         return ""
     except Exception as e:
         print(f"\n{SYMBOLS['warning']} 输入处理错误: {e}")
