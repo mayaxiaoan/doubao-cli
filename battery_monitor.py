@@ -22,6 +22,7 @@ class BatteryMonitor:
         self.display_thread = None
         self.is_user_scrolling = False  # 用户是否在滚动查看历史
         self.last_cursor_position = None  # 记录上次光标位置
+        self.hotkey_enabled = True  # 是否启用热键功能
         self._find_battery_path()
     
     def _find_battery_path(self):
@@ -86,46 +87,36 @@ class BatteryMonitor:
         self.current_level = level
         return level
     
-    def _check_user_scrolling(self):
-        """检测用户是否在滚动查看历史信息"""
-        try:
-            # 简单的方法：检查终端是否处于交互状态
-            # 如果stdin不是tty或者终端不支持某些功能，则跳过检测
-            if not sys.stdin.isatty():
-                return False
-            
-            # 检查终端是否支持光标位置查询
-            # 发送查询命令并尝试读取响应
-            sys.stdout.write("\033[6n")
-            sys.stdout.flush()
-            
-            # 使用非阻塞方式检查是否有响应
-            import select
-            import sys
-            
-            # 检查stdin是否有数据可读（超时很短）
-            if select.select([sys.stdin], [], [], 0.01)[0]:
-                # 读取响应
-                response = sys.stdin.read(10)
-                if response.startswith('\033[') and response.endswith('R'):
-                    # 解析光标位置
-                    coords = response[2:-1].split(';')
-                    if len(coords) == 2:
-                        current_row = int(coords[0])
-                        terminal_height = os.get_terminal_size().lines
-                        
-                        # 如果光标不在最后一行，说明用户在查看历史
-                        if current_row < terminal_height:
-                            self.is_user_scrolling = True
-                            return True
-            
-            self.is_user_scrolling = False
+    def pause_display(self):
+        """暂停电池显示刷新"""
+        self.is_user_scrolling = True
+    
+    def resume_display(self):
+        """恢复电池显示刷新"""
+        self.is_user_scrolling = False
+    
+    def check_hotkey_input(self, user_input):
+        """检查用户输入是否为热键"""
+        if not self.hotkey_enabled:
             return False
-            
-        except Exception:
-            # 如果检测失败，假设用户不在滚动
-            self.is_user_scrolling = False
-            return False
+        
+        # 检查是否为特殊键序列
+        # Shift+PageUp: \033[5;2~ (关闭电池显示)
+        if user_input == '\033[5;2~':
+            self.pause_display()
+            return True
+        
+        # Shift+PageDown: \033[6;2~ (开启电池显示)
+        if user_input == '\033[6;2~':
+            self.resume_display()
+            return True
+        
+        # End键: \033[F 或 \033[4~ (开启电池显示)
+        if user_input in ['\033[F', '\033[4~']:
+            self.resume_display()
+            return True
+        
+        return False
     
     def _get_battery_color(self, level):
         """根据电量获取颜色"""
@@ -136,9 +127,9 @@ class BatteryMonitor:
     
     def _display_battery_info(self):
         """在右下角显示电池信息"""
-        # 检查用户是否在滚动查看历史
-        if self._check_user_scrolling():
-            # 如果用户在滚动，暂停电池显示刷新
+        # 检查是否暂停显示
+        if self.is_user_scrolling:
+            # 如果暂停显示，跳过刷新
             return
         
         level = self.get_battery_status()

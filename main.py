@@ -186,6 +186,11 @@ def main():
             # 获取用户输入（使用安全输入函数）
             user_input = colored_input(f"\n{SYMBOLS['user']} 您{status}: ", 'user_text')
             
+            # 检查是否为热键输入
+            if battery_monitor.check_hotkey_input(user_input):
+                # 如果是热键，静默处理，不显示任何信息
+                continue
+            
             # 用户输入提示显示完成后，再显示电池信息
             battery_monitor.refresh_now()
             
@@ -217,6 +222,17 @@ def main():
                     colored_print(f"{SYMBOLS['success']} 连接状态: {health_info['message']} (响应时间: {health_info['response_time']}秒)", 'system_success')
                 else:
                     colored_print(f"{SYMBOLS['error']} 连接状态: {health_info['message']}", 'system_error')
+                continue
+            
+            # 电池显示控制命令
+            if user_input.lower() in ['battery_pause', '电池暂停', 'pause']:
+                battery_monitor.pause_display()
+                colored_print(f"{SYMBOLS['info']} 电池显示已暂停，输入 'battery_resume' 恢复", 'system_info')
+                continue
+            
+            if user_input.lower() in ['battery_resume', '电池恢复', 'resume']:
+                battery_monitor.resume_display()
+                colored_print(f"{SYMBOLS['success']} 电池显示已恢复", 'system_success')
                 continue
             
             
