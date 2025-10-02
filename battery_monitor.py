@@ -20,10 +20,9 @@ class BatteryMonitor:
         self.current_level = 100
         self.stop_event = threading.Event()
         self.display_thread = None
-        self.is_user_scrolling = False  # 用户是否在滚动查看历史
-        self.last_cursor_position = None  # 记录上次光标位置
-        self.hotkey_enabled = True  # 是否启用热键功能
+        self.tty_device = None  # TTY设备路径
         self._find_battery_path()
+        self._find_tty_device()
     
     def _find_battery_path(self):
         """查找电池信息文件路径"""
@@ -48,6 +47,24 @@ class BatteryMonitor:
         # 如果没有找到电池，判断为台式机
         self.is_desktop = True
         self.current_level = 100
+    
+    def _find_tty_device(self):
+        """查找TTY设备路径"""
+        try:
+            # 获取当前进程的TTY设备
+            tty_name = os.ttyname(sys.stdin.fileno())
+            if tty_name:
+                self.tty_device = tty_name
+            else:
+                # 备用方法：尝试常见的TTY设备
+                tty_devices = ['/dev/tty1', '/dev/tty2', '/dev/tty3', '/dev/tty4', '/dev/tty5', '/dev/tty6']
+                for tty_dev in tty_devices:
+                    if os.path.exists(tty_dev):
+                        self.tty_device = tty_dev
+                        break
+        except Exception:
+            # 如果无法找到TTY设备，使用None
+            self.tty_device = None
     
     def _read_battery_info(self):
         """读取电池信息"""
@@ -87,36 +104,6 @@ class BatteryMonitor:
         self.current_level = level
         return level
     
-    def pause_display(self):
-        """暂停电池显示刷新"""
-        self.is_user_scrolling = True
-    
-    def resume_display(self):
-        """恢复电池显示刷新"""
-        self.is_user_scrolling = False
-    
-    def check_hotkey_input(self, user_input):
-        """检查用户输入是否为热键"""
-        if not self.hotkey_enabled:
-            return False
-        
-        # 检查是否为特殊键序列
-        # Shift+PageUp: \033[5;2~ (关闭电池显示)
-        if user_input == '\033[5;2~':
-            self.pause_display()
-            return True
-        
-        # Shift+PageDown: \033[6;2~ (开启电池显示)
-        if user_input == '\033[6;2~':
-            self.resume_display()
-            return True
-        
-        # End键: \033[F 或 \033[4~ (开启电池显示)
-        if user_input in ['\033[F', '\033[4~']:
-            self.resume_display()
-            return True
-        
-        return False
     
     def _get_battery_color(self, level):
         """根据电量获取颜色"""
@@ -126,19 +113,13 @@ class BatteryMonitor:
             return COLORS.get('bright_white', '\033[97m')  # 其他情况显示白色
     
     def _display_battery_info(self):
-        """在右下角显示电池信息"""
-        # 检查是否暂停显示
-        if self.is_user_scrolling:
-            # 如果暂停显示，跳过刷新
+        """在TTY设备上显示电池信息（穿透fbterm）"""
+        if not self.tty_device:
+            # 如果没有TTY设备，回退到普通显示
+            self._display_battery_info_fallback()
             return
         
         level = self.get_battery_status()
-        
-        # 获取终端尺寸
-        try:
-            terminal_width, terminal_height = os.get_terminal_size().columns, os.get_terminal_size().lines
-        except:
-            terminal_width, terminal_height = 80, 24
         
         # 准备电池信息文本 - 使用新格式 ⚡[98%]
         if self.is_desktop:
@@ -148,28 +129,69 @@ class BatteryMonitor:
             battery_text = f"⚡[{level}%]"
             color = self._get_battery_color(level)
         
-        # 计算显示位置（右下角，始终靠右对齐）
+        # 计算显示位置（右下角）
+        reset_color = COLORS.get('reset', '\033[0m')
+        display_text = f"{color}{battery_text}{reset_color}"
+        
+        try:
+            # 直接写入TTY设备
+            with open(self.tty_device, 'w') as tty_file:
+                # 获取终端尺寸
+                try:
+                    terminal_width, terminal_height = os.get_terminal_size().columns, os.get_terminal_size().lines
+                except:
+                    terminal_width, terminal_height = 80, 24
+                
+                # 移动到右下角位置
+                max_text_length = 8
+                target_col = max(1, terminal_width - max_text_length)
+                move_cursor = f"\033[{terminal_height};{target_col}H"
+                
+                # 先清除该位置的内容
+                tty_file.write(f"{move_cursor}{' ' * max_text_length}")
+                
+                # 显示电池信息
+                tty_file.write(f"{move_cursor}{display_text}")
+                tty_file.flush()
+                
+        except Exception:
+            # 如果TTY写入失败，回退到普通显示
+            self._display_battery_info_fallback()
+    
+    def _display_battery_info_fallback(self):
+        """回退显示方法（在fbterm内显示）"""
+        level = self.get_battery_status()
+        
+        # 获取终端尺寸
+        try:
+            terminal_width, terminal_height = os.get_terminal_size().columns, os.get_terminal_size().lines
+        except:
+            terminal_width, terminal_height = 80, 24
+        
+        # 准备电池信息文本
+        if self.is_desktop:
+            battery_text = "⚡[100%]"
+            color = COLORS.get('bright_white', '\033[97m')
+        else:
+            battery_text = f"⚡[{level}%]"
+            color = self._get_battery_color(level)
+        
+        # 计算显示位置（右下角）
         reset_color = COLORS.get('reset', '\033[0m')
         display_text = f"{color}{battery_text}{reset_color}"
         
         # 保存当前光标位置
         sys.stdout.write("\033[s")
         
-        # 计算文本长度（考虑ANSI颜色代码不占用显示宽度）
-        # 关键修复：确保文本不会超出终端边界
-        text_length = len(battery_text)  # 只计算实际显示字符长度
-        
-        # 移动到右下角位置，确保不会换行
-        # 使用更保守的方法：预留更多空间，确保不会换行
-        max_text_length = 8  # 预留更多空间，避免边界问题
-        # 关键修复：确保位置不会超出终端边界
+        # 移动到右下角位置
+        max_text_length = 8
         target_col = max(1, terminal_width - max_text_length)
         move_cursor = f"\033[{terminal_height};{target_col}H"
         
-        # 先清除该位置的内容（用空格覆盖最大长度）
+        # 先清除该位置的内容
         sys.stdout.write(f"{move_cursor}{' ' * max_text_length}")
         
-        # 再次移动到相同位置并显示电池信息
+        # 显示电池信息
         sys.stdout.write(f"{move_cursor}{display_text}")
         
         # 恢复光标位置
@@ -212,19 +234,37 @@ class BatteryMonitor:
         while not self.stop_event.is_set():
             try:
                 self._display_battery_info()
-                time.sleep(10)  # 每10秒刷新一次
+                time.sleep(5)  # 每5秒刷新一次
             except Exception:
                 # 忽略显示错误，继续运行
                 pass
     
     def clear_display(self):
         """清除电池显示"""
+        if not self.tty_device:
+            # 如果没有TTY设备，使用普通清除方法
+            self._clear_display_fallback()
+            return
+        
+        try:
+            # 直接写入TTY设备清除
+            with open(self.tty_device, 'w') as tty_file:
+                terminal_width, terminal_height = os.get_terminal_size().columns, os.get_terminal_size().lines
+                target_col = max(1, terminal_width - 8)
+                move_cursor = f"\033[{terminal_height};{target_col}H"
+                tty_file.write(f"{move_cursor}{' ' * 8}")
+                tty_file.flush()
+        except Exception:
+            # 如果TTY清除失败，使用回退方法
+            self._clear_display_fallback()
+    
+    def _clear_display_fallback(self):
+        """回退清除方法"""
         try:
             terminal_width, terminal_height = os.get_terminal_size().columns, os.get_terminal_size().lines
             # 保存当前光标位置
             sys.stdout.write("\033[s")
-            # 移动到右下角并清除（清除最大可能的文本长度）
-            # 预留8个字符空间，避免边界问题
+            # 移动到右下角并清除
             target_col = max(1, terminal_width - 8)
             move_cursor = f"\033[{terminal_height};{target_col}H"
             sys.stdout.write(f"{move_cursor}{' ' * 8}")
