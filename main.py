@@ -300,8 +300,17 @@ def colored_input(prompt, color_key='user_text'):
     user_input = None  # 初始化变量
     try:
         debug_log("colored_input 准备获取输入", {"提示内容": colored_prompt})
-        user_input = input(colored_prompt)
-        debug_log("colored_input 获取到原始输入", {"原始输入": user_input, "长度": len(user_input) if user_input else 0})
+        
+        # 使用更安全的输入方式
+        try:
+            user_input = input(colored_prompt)
+            debug_log("colored_input 获取到原始输入", {"原始输入": user_input, "长度": len(user_input) if user_input else 0})
+        except UnicodeDecodeError as input_e:
+            debug_log("colored_input input() UnicodeDecodeError", {"错误": str(input_e)})
+            print(f"\n{SYMBOLS['warning']} 输入编码错误: {input_e}")
+            print(f"{SYMBOLS['info']} 这可能是fbterm中文输入法导致的UTF-8字节截断")
+            print(f"{SYMBOLS['info']} 请重新输入")
+            return ""
         
         # 专门处理fbterm中文输入法导致的UTF-8字节截断问题
         if isinstance(user_input, str):
