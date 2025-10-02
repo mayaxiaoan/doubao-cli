@@ -8,7 +8,7 @@ import os
 import threading
 import time
 import sys
-from config import COLORS, ENABLE_COLORS
+from config import COLORS, ENABLE_COLORS, BATTERY_DISPLAY_ENABLED, BATTERY_REFRESH_INTERVAL
 
 
 class BatteryMonitor:
@@ -140,6 +140,10 @@ class BatteryMonitor:
     
     def start_display(self):
         """开始显示电池信息"""
+        # 检查是否启用电池显示
+        if not BATTERY_DISPLAY_ENABLED:
+            return
+            
         if self.display_thread and self.display_thread.is_alive():
             return
         
@@ -149,6 +153,10 @@ class BatteryMonitor:
     
     def refresh_now(self):
         """立即刷新电池显示位置"""
+        # 检查是否启用电池显示
+        if not BATTERY_DISPLAY_ENABLED:
+            return
+            
         try:
             self._display_battery_info()
         except Exception:
@@ -157,6 +165,10 @@ class BatteryMonitor:
     
     def hide_display(self):
         """隐藏电池显示"""
+        # 检查是否启用电池显示
+        if not BATTERY_DISPLAY_ENABLED:
+            return
+            
         try:
             self.clear_display()
         except Exception:
@@ -174,7 +186,7 @@ class BatteryMonitor:
         while not self.stop_event.is_set():
             try:
                 self._display_battery_info()
-                time.sleep(5)  # 每5秒刷新一次
+                time.sleep(BATTERY_REFRESH_INTERVAL)  # 使用配置的刷新间隔
             except Exception:
                 # 忽略显示错误，继续运行
                 pass

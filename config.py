@@ -139,3 +139,7 @@ GLOBAL_RULES = [
 
 # 是否启用全局规则
 ENABLE_GLOBAL_RULES = True
+
+# 电池显示配置
+BATTERY_DISPLAY_ENABLED = True  # 是否启用电池显示，默认开启
+BATTERY_REFRESH_INTERVAL = 10  # 电池刷新间隔（秒），默认10秒
