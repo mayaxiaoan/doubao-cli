@@ -161,14 +161,14 @@ def colored_input(prompt, color_key='user_text'):
         else:
             colored_print(f"{prompt}[编码错误，输入内容无法显示]", 'system_error')
         
-        colored_print(f"\n{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
+        colored_print(f"{SYMBOLS['warning']} 输入编码错误: {e}", 'system_error')
         colored_print(f"{SYMBOLS['info']} 这可能是删除汉字导致的，由于编码显示的问题，你每删除一个汉字实际要按三次回退键哦，记住次数，不要在意显示被删除的文字", 'system_warning')
         
         # 如果成功清理出有效内容，询问用户是否使用清理后的内容
         if cleaned_input:
-            colored_print(f"\n{SYMBOLS['info']} 已自动清理错误字符，处理后的内容为:", 'system_info')
+            colored_print(f"{SYMBOLS['info']} 已自动清理错误字符，处理后的内容为:", 'system_info')
             colored_print(f"{SYMBOLS['user']} {cleaned_input}", 'bright_green')
-            colored_print(f"\n{SYMBOLS['info']} 按 Enter 确认发送，按任意其他键取消", 'system_info')
+            colored_print(f"{SYMBOLS['info']} 按 Enter 确认发送，按任意其他键取消", 'system_info')
             
             try:
                 key = getch()
