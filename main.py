@@ -70,10 +70,11 @@ def test_utf8_scenarios():
     
     test_cases = [
         "你好世界",
-        "Hello World",
+        "Hello World", 
         "测试中文123",
         "混合内容：中文English123",
         "特殊字符：！@#￥%……&*（）",
+        "你好，我在测试输入法",  # 添加您的实际测试文本
     ]
     
     for i, test_text in enumerate(test_cases):
@@ -103,6 +104,42 @@ def test_utf8_scenarios():
                         
         except Exception as e:
             debug_log(f"测试案例 {i+1} 处理失败", {"错误": str(e)})
+    
+    # 测试fbterm可能的输入问题
+    debug_log("开始fbterm输入问题模拟测试")
+    
+    # 模拟fbterm可能产生的字符串（包含无效字节）
+    problematic_strings = [
+        # 模拟截断的中文字符
+        "你好，我在测试输",  # 截断了"入法"
+        "你好，我在测试",    # 截断了"输入法"
+        "你好，我在测",      # 截断了"试输入法"
+    ]
+    
+    for i, prob_text in enumerate(problematic_strings):
+        debug_log(f"问题字符串 {i+1}", {"内容": prob_text})
+        
+        # 尝试用latin-1编码来模拟fbterm的行为
+        try:
+            # 假设这个字符串包含了一些无效的字节
+            prob_bytes = prob_text.encode('utf-8')
+            debug_log(f"问题字符串 {i+1} UTF-8字节", {"字节": list(prob_bytes)})
+            
+            # 模拟截断
+            for truncate_pos in range(1, len(prob_bytes)):
+                truncated_bytes = prob_bytes[:truncate_pos]
+                try:
+                    truncated_text = truncated_bytes.decode('utf-8')
+                    debug_log(f"问题字符串 {i+1} 截断位置 {truncate_pos}", {"成功解码": truncated_text})
+                except UnicodeDecodeError as e:
+                    debug_log(f"问题字符串 {i+1} 截断位置 {truncate_pos}", {"解码失败": str(e)})
+                    
+                    # 测试我们的修复算法
+                    fixed_text = smart_fix_utf8_sequence(truncated_text, str(e))
+                    debug_log(f"问题字符串 {i+1} 截断位置 {truncate_pos} 智能修复", {"修复结果": fixed_text})
+                    
+        except Exception as e:
+            debug_log(f"问题字符串 {i+1} 处理失败", {"错误": str(e)})
     
     debug_log("UTF-8测试场景完成")
 
@@ -257,11 +294,39 @@ def colored_input(prompt, color_key='user_text'):
         if isinstance(user_input, str):
             debug_log("用户输入检测", {"类型": "str", "长度": len(user_input), "内容": user_input})
             
-            # 检查字符串是否包含无效的UTF-8序列
+            # 深度检测：检查字符串的内部字节表示
             try:
-                # 尝试重新编码来检测无效序列
+                # 获取字符串的字节表示
+                text_bytes = user_input.encode('utf-8')
+                debug_log("字符串字节分析", {"字节长度": len(text_bytes), "字节序列": list(text_bytes)})
+                
+                # 检查是否有无效的UTF-8序列
                 user_input.encode('utf-8').decode('utf-8')
                 debug_log("编码检测通过，无需修复")
+                
+                # 额外检测：尝试用latin-1编码来检测隐藏的字节问题
+                try:
+                    latin_bytes = user_input.encode('latin-1')
+                    debug_log("Latin-1字节分析", {"字节长度": len(latin_bytes), "字节序列": list(latin_bytes)})
+                    
+                    # 检查latin-1字节是否能正确解码为UTF-8
+                    latin_bytes.decode('utf-8')
+                    debug_log("Latin-1到UTF-8转换正常")
+                except UnicodeDecodeError as latin_e:
+                    debug_log("Latin-1检测到UTF-8问题", {"错误": str(latin_e)})
+                    print(f"\n{SYMBOLS['warning']} 检测到隐藏的编码问题: {latin_e}")
+                    
+                    # 尝试修复
+                    fixed_input = smart_fix_utf8_sequence(user_input, str(latin_e))
+                    debug_log("Latin-1修复结果", {"修复后内容": fixed_input})
+                    
+                    if fixed_input != user_input:
+                        print(f"{SYMBOLS['success']} 已自动修复隐藏编码问题")
+                        user_input = fixed_input
+                    else:
+                        user_input = user_input.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+                        print(f"{SYMBOLS['warning']} 使用替换策略修复隐藏编码问题")
+                
             except UnicodeDecodeError as e:
                 # 捕获具体的错误信息进行精确修复
                 error_msg = str(e)
