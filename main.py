@@ -16,7 +16,7 @@ from battery_monitor import battery_monitor
 DEBUG_LOG_FILE = "debug_utf8_fix.log"
 
 def debug_log(message, data=None):
-    """记录调试信息到文件"""
+    """记录调试信息到文件 - 每次启动时清空日志"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     log_entry = f"[{timestamp}] {message}"
     
@@ -26,6 +26,14 @@ def debug_log(message, data=None):
     log_entry += "\n"
     
     try:
+        # 检查是否是程序启动时的第一次日志
+        if not hasattr(debug_log, '_initialized'):
+            debug_log._initialized = True
+            # 清空日志文件并写入启动信息
+            with open(DEBUG_LOG_FILE, "w", encoding="utf-8") as f:
+                f.write(f"[{timestamp}] 程序启动 | 数据: {{'时间': '{timestamp}'}}\n")
+        
+        # 追加日志
         with open(DEBUG_LOG_FILE, "a", encoding="utf-8") as f:
             f.write(log_entry)
     except Exception as e:
