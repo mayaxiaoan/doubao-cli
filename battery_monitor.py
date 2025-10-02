@@ -99,12 +99,12 @@ class BatteryMonitor:
         """在TTY上显示电池信息"""
         level = self.get_battery_status()
         
-        # 准备电池信息文本 - 使用新格式 ⚡[98%]
+        # 准备电池信息文本 - 使用新格式 pow[98%]
         if self.is_desktop:
-            battery_text = "⚡[100%]"
+            battery_text = "pow[100%]"
             color = '\033[33m'  # 默认黄色
         else:
-            battery_text = f"⚡[{level}%]"
+            battery_text = f"pow[{level}%]"
             color = self._get_battery_color(level)
         
         # TTY颜色重置
@@ -114,14 +114,14 @@ class BatteryMonitor:
         try:
             # 直接写入TTY设备
             with open(self.tty_device, 'w') as tty_file:
-                # 移动到指定位置 (1, 90)
-                tty_file.write("\033[1;90H")
+                # 移动到指定位置 (1, 120) - 更接近右上角
+                tty_file.write("\033[1;120H")
                 
                 # 先清除该位置的内容
-                tty_file.write(" " * 10)
+                tty_file.write(" " * 12)  # 增加清除长度，因为pow[100%]比⚡[100%]长
                 
                 # 再次移动到相同位置并显示电池信息
-                tty_file.write("\033[1;90H")
+                tty_file.write("\033[1;120H")
                 tty_file.write(display_text)
                 tty_file.flush()
                 
@@ -175,8 +175,8 @@ class BatteryMonitor:
         try:
             # 直接写入TTY设备清除
             with open(self.tty_device, 'w') as tty_file:
-                tty_file.write("\033[1;90H")
-                tty_file.write(" " * 10)  # 清除电池信息
+                tty_file.write("\033[1;120H")
+                tty_file.write(" " * 12)  # 清除电池信息
                 tty_file.flush()
         except Exception:
             # 如果TTY清除失败，静默忽略
