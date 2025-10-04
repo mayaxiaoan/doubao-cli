@@ -8,6 +8,7 @@ import os
 import threading
 import time
 import sys
+import platform
 from config import COLORS, ENABLE_COLORS, BATTERY_DISPLAY_ENABLED, BATTERY_REFRESH_INTERVAL
 
 
@@ -206,5 +207,33 @@ class BatteryMonitor:
             pass
 
 
-# 全局电池监控器实例
-battery_monitor = BatteryMonitor()
+
+class DummyBatteryMonitor:
+    """Windows 下的空操作电池监控器"""
+    def __init__(self):
+        pass
+    
+    def start_display(self):
+        pass
+    
+    def stop_display(self):
+        pass
+    
+    def refresh_now(self):
+        pass
+    
+    def hide_display(self):
+        pass
+    
+    def clear_display(self):
+        pass
+    
+    def get_battery_status(self):
+        return 100
+
+
+# 全局电池监控器实例 - 根据操作系统选择实现
+if platform.system() == 'Windows':
+    battery_monitor = DummyBatteryMonitor()
+else:
+    battery_monitor = BatteryMonitor()

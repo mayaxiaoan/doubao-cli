@@ -76,6 +76,7 @@ class DoubaoClient:
         try:
             self.add_user_message(message)
             
+            # 使用chat.completions端点来支持思考功能
             response = self.client.chat.completions.create(
                 model=ARK_ENDPOINT_ID,
                 messages=self.conversation_history,
@@ -88,7 +89,9 @@ class DoubaoClient:
             
             full_content = ""
             
+            # 遍历API原始流式回复
             for chunk in response:
+                # 处理chat.completions端点的响应格式
                 if chunk.choices and len(chunk.choices) > 0:
                     delta = chunk.choices[0].delta
                     

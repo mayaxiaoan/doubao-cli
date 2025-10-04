@@ -5,9 +5,18 @@
 """
 
 import sys
-import tty
-import termios
+import platform
 
+# Windows 下禁用 UTF8 修复功能（不需要）
+_IS_WINDOWS = platform.system() == 'Windows'
+
+# 只在非 Windows 系统导入 termios 和 tty
+if not _IS_WINDOWS:
+    try:
+        import tty
+        import termios
+    except ImportError:
+        _IS_WINDOWS = True
 
 # 全局标志：记录是否已经显示过编码错误提示
 _encoding_error_tip_shown = False
@@ -15,6 +24,9 @@ _encoding_error_tip_shown = False
 
 def getch():
     """读取单个按键（无需按Enter）"""
+    if _IS_WINDOWS:
+        raise NotImplementedError("getch not available on Windows")
+    
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
@@ -33,32 +45,18 @@ def getch():
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
-def safe_input(prompt, colored_print_func, symbols, colors, enable_colors):
-    """
-    安全的输入函数，支持编码错误自动修复
-    
-    参数:
-        prompt: 提示符文本
-        colored_print_func: 彩色打印函数
-        symbols: 符号字典
-        colors: 颜色字典
-        enable_colors: 是否启用颜色
-    
-    返回:
-        用户输入的字符串（可能是修复后的）
-    """
+def _safe_input_windows(prompt_text):
+    """Windows 下的简单输入（无需 UTF8 修复）"""
+    try:
+        user_input = input()
+        return user_input.strip()
+    except Exception:
+        return ""
+
+
+def _safe_input_linux(prompt_text, colored_print_func, symbols, colors, enable_colors):
+    """Linux 下的输入（支持 UTF8 修复）"""
     global _encoding_error_tip_shown
-    
-    # 生成彩色提示符
-    if enable_colors and 'user_text' in colors:
-        colored_prompt = f"{colors['user_text']}{prompt}{colors['reset']}"
-    else:
-        colored_prompt = prompt
-    
-    # 先打印提示符
-    print(colored_prompt, end='', flush=True)
-    
-    # 存储用户实际输入的原始字节数据
     raw_input = None
     
     try:
@@ -76,7 +74,7 @@ def safe_input(prompt, colored_print_func, symbols, colors, enable_colors):
     except UnicodeDecodeError as e:
         # 处理编码错误
         return _handle_encoding_error(
-            e, raw_input, prompt, 
+            e, raw_input, prompt_text, 
             colored_print_func, symbols, 
             colors, enable_colors
         )
@@ -85,6 +83,36 @@ def safe_input(prompt, colored_print_func, symbols, colors, enable_colors):
         print(f"\n{symbols['warning']} 输入处理错误: {e}")
         print(f"{symbols['info']} 请重新输入")
         return ""
+
+
+def safe_input(prompt, colored_print_func, symbols, colors, enable_colors):
+    """
+    安全的输入函数，支持编码错误自动修复
+    
+    参数:
+        prompt: 提示符文本
+        colored_print_func: 彩色打印函数
+        symbols: 符号字典
+        colors: 颜色字典
+        enable_colors: 是否启用颜色
+    
+    返回:
+        用户输入的字符串（可能是修复后的）
+    """
+    # 生成彩色提示符
+    if enable_colors and 'user_text' in colors:
+        colored_prompt = f"{colors['user_text']}{prompt}{colors['reset']}"
+    else:
+        colored_prompt = prompt
+    
+    # 打印提示符
+    print(colored_prompt, end='', flush=True)
+    
+    # 根据操作系统选择不同的实现
+    if _IS_WINDOWS:
+        return _safe_input_windows(prompt)
+    else:
+        return _safe_input_linux(prompt, colored_print_func, symbols, colors, enable_colors)
 
 
 def _handle_encoding_error(error, raw_input, prompt, colored_print_func, symbols, colors, enable_colors):
