@@ -1,295 +1,197 @@
 # -*- coding: utf-8 -*-
 """
 豆包AI聊天程序主入口
+
+使用方法：
+    python main.py
 """
 
-import threading
-import time
 import sys
-import os
-from doubao_client import DoubaoClient
-from config import SYMBOLS, COLORS, ENABLE_COLORS, DEFAULT_THINKING_MODE
-from battery_monitor import battery_monitor
-from input_handler import safe_input
+import threading
+
+from src.client import DoubaoClient
+from src.config import SYMBOLS, COLORS, DEFAULT_THINKING_MODE
+from src.utils import setup_encoding, get_battery_monitor, InputHandler
+from src.ui import (
+    colored_print,
+    print_welcome,
+    print_usage,
+    waiting_animation,
+    StreamOutputHandler
+)
 
 
+def parse_thinking_mode(user_input: str):
+    """解析深度思考控制符号
+    
+    Args:
+        user_input: 用户输入
+    
+    Returns:
+        tuple: (thinking_mode, actual_message, thinking_status)
+    """
+    thinking_mode = DEFAULT_THINKING_MODE
+    actual_message = user_input
+    thinking_status = ""
+    
+    if user_input.startswith("#think "):
+        thinking_mode = "enabled"
+        actual_message = user_input[7:]
+        thinking_status = " [要求深度思考]"
+    elif user_input.startswith("#fast "):
+        thinking_mode = "disabled"
+        actual_message = user_input[6:]
+        thinking_status = " [快速回复]"
+    
+    return thinking_mode, actual_message, thinking_status
 
-def setup_encoding():
-    """设置编码环境"""
-    try:
-        if hasattr(sys.stdout, 'reconfigure'):
-            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-        os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+def handle_user_command(user_input: str, client: DoubaoClient) -> bool:
+    """处理用户命令
+    
+    Args:
+        user_input: 用户输入
+        client: 豆包客户端
+    
+    Returns:
+        如果是退出命令返回True，否则返回False
+    """
+    # 检查退出命令
+    if user_input.lower() in ['exit', 'quit', '退出']:
+        colored_print(f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！", 'system_info')
         return True
-    except Exception:
-        return False
-
-
-
-
-
-
-
-
-def waiting_animation(stop_event):
-    """显示等待动画"""
-    spinners = SYMBOLS['spinner']
-    messages = ["正在连接豆包AI...", "正在思考中...", "正在组织语言...", "马上就好..."]
     
-    idx = 0
-    msg_idx = 0
-    msg_counter = 0
+    # 清空对话历史
+    if user_input.lower() in ['clear', 'new', '新话题']:
+        client.clear_history()
+        colored_print(f"{SYMBOLS['success']} 对话历史已清空，我们可以开始新的聊天话题", 'system_success')
     
-    # 等待动画
-    while not stop_event.is_set():
-        if msg_counter > 0 and msg_counter % 30 == 0:
-            msg_idx = (msg_idx + 1) % len(messages)
-        
-        current_msg = f'{SYMBOLS["bot"]} 豆包: {spinners[idx]} {messages[msg_idx]}'
-        if ENABLE_COLORS:
-            colored_msg = f'{COLORS["bot_text"]}{current_msg}{COLORS["reset"]}'
-        else:
-            colored_msg = current_msg
-        print(f'\r{colored_msg}' + ' ' * 20, end='', flush=True)
-        
-        idx = (idx + 1) % len(spinners)
-        msg_counter += 1
-        time.sleep(0.1)
-    
-    print('\r' + ' ' * 80, end='')
-    if ENABLE_COLORS:
-        colored_prefix = f'{COLORS["bot_text"]}{SYMBOLS["bot"]} 豆包: {COLORS["reset"]}'
-    else:
-        colored_prefix = f'{SYMBOLS["bot"]} 豆包: '
-    print(f'\r{colored_prefix}', end='', flush=True)
+    return False
 
 
-def colored_print(text, color_key='reset', end='\n', flush=False):
-    """带颜色的安全打印函数"""
-    if ENABLE_COLORS and color_key in COLORS:
-        colored_text = f"{COLORS[color_key]}{text}{COLORS['reset']}"
-    else:
-        colored_text = text
+def process_ai_response(
+    client: DoubaoClient,
+    message: str,
+    thinking_mode: str,
+    thinking_status: str
+) -> None:
+    """处理AI流式响应
     
-    # 处理UTF-8编码问题
+    Args:
+        client: 豆包客户端
+        message: 用户消息
+        thinking_mode: 思考模式
+        thinking_status: 思考状态标记
+    """
+    # 启动等待动画
+    stop_animation = threading.Event()
+    animation_thread = threading.Thread(
+        target=waiting_animation,
+        args=(stop_animation,)
+    )
+    animation_thread.daemon = True
+    animation_thread.start()
+    
     try:
-        print(colored_text, end=end, flush=flush)
-    except UnicodeEncodeError:
-        # 如果遇到编码错误，使用ASCII安全的方式
-        try:
-            safe_text = colored_text.encode('gbk', errors='replace').decode('gbk', errors='replace')
-            print(safe_text, end=end, flush=flush)
-        except:
-            # 最后的备用方案：只保留ASCII字符
-            ascii_text = ''.join(char if ord(char) < 128 else '?' for char in colored_text)
-            print(ascii_text, end=end, flush=flush)
+        output_handler = StreamOutputHandler()
+        
+        # 处理流式回复
+        for chunk_data in client.chat_stream(message, thinking_mode):
+            output_handler.process_chunk(chunk_data, stop_animation, thinking_status)
+        
+        # 完成输出
+        output_handler.finalize(stop_animation)
+        
+    except Exception as e:
+        stop_animation.set()
+        print('\r' + ' ' * 80, end='')
+        colored_print(f"\r{SYMBOLS['error']} 流式输出异常: {e}", 'system_error')
 
 
-def colored_input(prompt, color_key='user_text'):
+def chat_loop(client: DoubaoClient, input_handler: InputHandler) -> None:
+    """主聊天循环
+    
+    Args:
+        client: 豆包客户端
+        input_handler: 输入处理器
     """
-    带颜色的安全输入函数
-    封装了编码错误自动修复功能
-    """
-    return safe_input(prompt, colored_print, SYMBOLS, COLORS, ENABLE_COLORS)
+    while True:
+        # 显示对话状态
+        conv_length = client.get_conversation_length()
+        status = f" (第{conv_length // 2 + 1}轮对话)" if conv_length > 0 else " (新对话)"
+        
+        # 获取用户输入
+        user_input = input_handler.get_input(
+            f"\n 您{status}: ",
+            colored_print,
+            SYMBOLS,
+            COLORS,
+            True
+        )
+        
+        # 重新显示用户输入
+        if user_input.strip():
+            print(f"\033[1A\033[2K", end="")
+            colored_print(f" 您{status}: {user_input}", 'user_text')
+        
+        # 处理命令
+        if handle_user_command(user_input, client):
+            break
+        
+        # 检查输入是否为空
+        if not user_input:
+            colored_print(f"{SYMBOLS['warning']}  没有收到你的文字哦，请输入有效的消息", 'system_warning')
+            continue
+        
+        # 解析深度思考控制符号
+        thinking_mode, actual_message, thinking_status = parse_thinking_mode(user_input)
+        
+        # 如果只有控制符号，实际内容为空
+        if not actual_message.strip():
+            colored_print(f"{SYMBOLS['warning']}  请在控制符号后输入有效的消息", 'system_warning')
+            continue
+        
+        # 处理AI响应
+        print()
+        process_ai_response(client, actual_message, thinking_mode, thinking_status)
 
 
-def main():
+def main() -> None:
     """主函数"""
+    # 设置编码
     setup_encoding()
+    
+    # 初始化电池监控
+    battery_monitor = get_battery_monitor()
     battery_monitor.start_display()
     
     # 显示欢迎界面
-    colored_print(f"{SYMBOLS['separator']}" * 70, 'separator_line')
-    colored_print(f"    {SYMBOLS['star']} 我是制杖但勤劳的豆包AI (支持上下文对话 + 深度思考控制) {SYMBOLS['star']}", 'bright_white')
-    colored_print(f"{SYMBOLS['separator']}" * 70, 'separator_line')
-    print()
-    
-    # ASCII艺术猫
-    colored_print("      /\\_/\\    QUÉ MIRA BOBO?", 'cat_art')
-    colored_print(" /\\  / o o \\    ﾉ", 'cat_art')
-    colored_print("//\\\\ \\~(*)~/", 'cat_art')
-    colored_print("`  \\/   ^ /", 'cat_art')
-    colored_print("   | \\|| ||", 'cat_art')
-    colored_print("   \\ '|| ||", 'cat_art')
-    colored_print("    \\(()-())", 'cat_art')
-    colored_print(" ~~~~~~~~~~~~~~~", 'cat_art')
-    
-    # 使用说明
-    colored_print(f"{SYMBOLS['info']} 输入消息开始聊天", 'system_info')
-    colored_print(f"{SYMBOLS['info']} 输入 'exit' 、'quit' 或 '退出' 关闭程序", 'system_info')
-    colored_print(f"{SYMBOLS['info']} 输入 'clear'、'new' 或 '新话题' 开始新的聊天", 'system_info')
-    colored_print(f"{SYMBOLS['info']} 深度思考控制：", 'system_info')
-    colored_print("   - 默认：自动判断是否需要深度思考", 'system_info')
-    colored_print("   - #think 开头：强制启用深度思考", 'system_info')
-    colored_print("   - #fast 开头：禁用深度思考，快速回复", 'system_info')
-    colored_print(f"{SYMBOLS['separator']}" * 70, 'separator_line')
-    print()
+    print_welcome()
+    print_usage()
     
     try:
         # 初始化豆包客户端
         client = DoubaoClient()
         colored_print(f"{SYMBOLS['success']} 豆包AI客户端初始化成功", 'system_success')
         
+        # 初始化输入处理器
+        input_handler = InputHandler()
+        
         # 开始聊天循环
-        while True:
-            # 显示对话状态
-            conv_length = client.get_conversation_length()
-            status = f" (第{conv_length // 2 + 1}轮对话)" if conv_length > 0 else " (新对话)"
-            
-            # 获取用户输入
-            user_input = colored_input(f"\n{SYMBOLS['user']} 您{status}: ", 'user_text')
-            
-            
-            # 重新显示用户输入
-            if user_input.strip():
-                print(f"\033[1A\033[2K", end="")
-                colored_print(f"{SYMBOLS['user']} 您{status}: {user_input}", 'user_text')
-            
-            # 检查退出命令
-            if user_input.lower() in ['exit', 'quit', '退出']:
-                colored_print(f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！", 'system_info')
-                battery_monitor.stop_display()
-                break
-            
-            # 清空对话历史
-            if user_input.lower() in ['clear', 'new', '新话题']:
-                client.clear_history()
-                colored_print(f"{SYMBOLS['success']} 对话历史已清空，我们可以开始新的聊天话题", 'system_success')
-                continue
-            
-            # 检查用户输入是否为空
-            if not user_input:
-                colored_print(f"{SYMBOLS['warning']}  没有收到你的文字哦，请输入有效的消息", 'system_warning')
-                continue
-            
-            # 解析深度思考控制符号
-            thinking_mode = DEFAULT_THINKING_MODE
-            actual_message = user_input
-            thinking_status = ""
-            
-            if user_input.startswith("#think "):
-                thinking_mode = "enabled"
-                actual_message = user_input[7:]
-                thinking_status = " [要求深度思考]"
-            elif user_input.startswith("#fast "):
-                thinking_mode = "disabled"
-                actual_message = user_input[6:]
-                thinking_status = " [快速回复]"
-            
-            #如果只有控制符号，实际内容为空，则给出提示
-            if not actual_message.strip():
-                colored_print(f"{SYMBOLS['warning']}  请在控制符号后输入有效的消息", 'system_warning')
-                continue
-            
-            # 发送消息并获取流式回复
-            print()
-            
-            # 启动等待动画
-            stop_animation = threading.Event()
-            animation_thread = threading.Thread(target=waiting_animation, args=(stop_animation,))
-            animation_thread.daemon = True
-            animation_thread.start()
-            
-            try:
-                # 该变量用于标记是否已经打印过深度思考内容，主要用于控制输出格式，防止重复打印
-                reasoning_displayed = False
-                # 该变量用于标记是否已经打印过普通回复内容，主要用于控制输出格式，防止重复打印
-                content_started = False
-                # 该变量用于标记是否已经收到流式回复的第一个内容块（无论是reasoning还是content），
-                # 主要用于停止等待动画和控制输出格式。
-                first_chunk_received = False
-                # 标记是否显示过Web Search相关信息
-                web_search_displayed = False
-                
-                # 遍历流式回复
-                for chunk_data in client.chat_stream(actual_message, thinking_mode):
-                    if chunk_data is None:
-                        continue
-                    
-                    # 处理 Web Search 开始事件
-                    if chunk_data.get('type') == 'web_search_start':
-                        if not first_chunk_received:
-                            stop_animation.set()
-                            time.sleep(0.15)
-                            first_chunk_received = True
-                        if not web_search_displayed:
-                            colored_print(f"\n{SYMBOLS['connect']} 正在联网搜索...", 'system_info')
-                            web_search_displayed = True
-                    
-                    # 处理 Web Search 搜索中事件
-                    elif chunk_data.get('type') == 'web_search_searching':
-                        search_query = chunk_data.get('search_query', '')
-                        if search_query:
-                            colored_print(f"{SYMBOLS['arrow_right']} 搜索关键词: {search_query}", 'system_info')
-                    
-                    # 处理 Web Search 完成事件
-                    elif chunk_data.get('type') == 'web_search_completed':
-                        colored_print(f"{SYMBOLS['success']} 联网搜索完成，正在整理答案...", 'system_success')
-                    
-                    # 处理深度思考内容
-                    elif chunk_data.get('type') == 'reasoning' and chunk_data.get('reasoning'):
-                        if not reasoning_displayed:
-                            if not first_chunk_received:
-                                stop_animation.set()
-                                time.sleep(0.15)
-                                first_chunk_received = True
-                            colored_print(f"\n{SYMBOLS['thinking']} 深度思考中...{thinking_status}", 'separator_line')
-                            colored_print(f"{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}", 'separator_line')
-                            reasoning_displayed = True
-                        colored_print(chunk_data['reasoning'], 'bot_thinking', end="", flush=True)
-                    
-                    # 处理普通回复内容
-                    elif chunk_data.get('type') == 'content' and chunk_data.get('content'):
-                        if not content_started:
-                            if reasoning_displayed:
-                                colored_print(f"\n{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}", 'separator_line')
-                                if thinking_status != " [要求深度思考]":
-                                    colored_print(f"{SYMBOLS['bot']} 豆包{thinking_status}: ", 'bot_text', end="", flush=True)
-                            elif not first_chunk_received:
-                                stop_animation.set()
-                                time.sleep(0.15)
-                                first_chunk_received = True
-                            content_started = True
-                        
-                        if not first_chunk_received:
-                            stop_animation.set()
-                            time.sleep(0.15)
-                            first_chunk_received = True
-                        
-                        colored_print(chunk_data['content'], 'bot_text', end="", flush=True)
-                
-                # 确保动画已停止
-                if not first_chunk_received:
-                    stop_animation.set()
-                    time.sleep(0.15)
-                    print('\r' + ' ' * 80, end='')
-                    print('\r', end='', flush=True)
-                
-                # 换行准备下一轮对话
-                if first_chunk_received:
-                    print()
-                    
-            except Exception as e:
-                stop_animation.set()
-                time.sleep(0.2)
-                print('\r' + ' ' * 80, end='')
-                colored_print(f"\r{SYMBOLS['error']} 流式输出异常: {e}", 'system_error')
-    
+        chat_loop(client, input_handler)
+        
     except ValueError as e:
         colored_print(f"{SYMBOLS['error']} 配置错误: {e}", 'system_error')
-        colored_print(f"{SYMBOLS['docs']} 请检查config.py文件，确保已正确填写API密钥信息", 'system_info')
-    except UnicodeDecodeError as e:
-        colored_print(f"{SYMBOLS['error']} UTF-8编码错误: {e}", 'system_error')
-        colored_print(f"{SYMBOLS['warning']} 程序将继续运行，但某些字符可能显示异常", 'system_warning')
+        colored_print(f"{SYMBOLS['docs']} 请检查 src/config.py 文件，确保已正确填写API密钥信息", 'system_info')
     except KeyboardInterrupt:
         colored_print(f"\n\n{SYMBOLS['goodbye']} 程序被用户中断，再见！", 'system_info')
-        battery_monitor.stop_display()
-        battery_monitor.clear_display()
-        sys.exit(0)
     except Exception as e:
         colored_print(f"{SYMBOLS['error']} 程序运行异常: {e}", 'system_error')
+    finally:
+        battery_monitor.stop_display()
+        battery_monitor.clear_display()
 
 
 if __name__ == "__main__":
     main()
+
