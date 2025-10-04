@@ -199,13 +199,36 @@ def main():
                 # 该变量用于标记是否已经收到流式回复的第一个内容块（无论是reasoning还是content），
                 # 主要用于停止等待动画和控制输出格式。
                 first_chunk_received = False
+                # 标记是否显示过Web Search相关信息
+                web_search_displayed = False
+                
                 # 遍历流式回复
                 for chunk_data in client.chat_stream(actual_message, thinking_mode):
                     if chunk_data is None:
                         continue
                     
+                    # 处理 Web Search 开始事件
+                    if chunk_data.get('type') == 'web_search_start':
+                        if not first_chunk_received:
+                            stop_animation.set()
+                            time.sleep(0.15)
+                            first_chunk_received = True
+                        if not web_search_displayed:
+                            colored_print(f"\n{SYMBOLS['connect']} 正在联网搜索...", 'system_info')
+                            web_search_displayed = True
+                    
+                    # 处理 Web Search 搜索中事件
+                    elif chunk_data.get('type') == 'web_search_searching':
+                        search_query = chunk_data.get('search_query', '')
+                        if search_query:
+                            colored_print(f"{SYMBOLS['arrow_right']} 搜索关键词: {search_query}", 'system_info')
+                    
+                    # 处理 Web Search 完成事件
+                    elif chunk_data.get('type') == 'web_search_completed':
+                        colored_print(f"{SYMBOLS['success']} 联网搜索完成，正在整理答案...", 'system_success')
+                    
                     # 处理深度思考内容
-                    if chunk_data.get('type') == 'reasoning' and chunk_data.get('reasoning'):
+                    elif chunk_data.get('type') == 'reasoning' and chunk_data.get('reasoning'):
                         if not reasoning_displayed:
                             if not first_chunk_received:
                                 stop_animation.set()
