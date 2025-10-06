@@ -18,6 +18,7 @@ from .config import (
     GLOBAL_SYSTEM_PROMPT,
     WEB_SEARCH_CONFIG
 )
+from .utils.id_mapper import get_id_mapper
 
 
 def safe_decode_response(content: Any) -> Optional[str]:
@@ -51,6 +52,7 @@ class DoubaoClient:
         self._validate_config()
         self._init_client()
         self._init_conversation_state()
+        self.id_mapper = get_id_mapper()  # 获取ID映射器
     
     def _validate_config(self) -> None:
         """验证配置有效性"""
@@ -76,6 +78,18 @@ class DoubaoClient:
         """清空对话历史"""
         self.previous_response_id = None
         self.conversation_count = 0
+    
+    def set_response_id(self, short_id: str) -> None:
+        """设置response_id，用于从指定对话点继续
+        
+        Args:
+            short_id: 短id
+        """
+        # 将短id转换为长id
+        long_id = self.id_mapper.get_long_id(short_id)
+        if long_id:
+            self.previous_response_id = long_id
+        # 注意：这里不重置 conversation_count，因为我们是在继续之前的对话
     
     def get_conversation_length(self) -> int:
         """获取对话消息数量"""
@@ -165,28 +179,28 @@ class DoubaoClient:
             
             # 处理Web Search事件
             elif chunk_type == "response.web_search_call.in_progress":
-                yield self._create_chunk_data('web_search_start', thinking_mode)
+                yield self._create_chunk_data('web_search_start', thinking_mode, response_id=response_id)
             
             elif chunk_type == "response.web_search_call.searching":
                 search_query = getattr(chunk, "query", "")
-                yield self._create_chunk_data('web_search_searching', thinking_mode, search_query=search_query)
+                yield self._create_chunk_data('web_search_searching', thinking_mode, search_query=search_query, response_id=response_id)
             
             elif chunk_type == "response.web_search_call.completed":
-                yield self._create_chunk_data('web_search_completed', thinking_mode)
+                yield self._create_chunk_data('web_search_completed', thinking_mode, response_id=response_id)
             
             # 处理思考内容
             elif chunk_type == "response.reasoning_summary_text.delta":
                 delta = getattr(chunk, "delta", "")
                 if delta:
                     safe_reasoning = safe_decode_response(delta)
-                    yield self._create_chunk_data('reasoning', thinking_mode, reasoning=safe_reasoning)
+                    yield self._create_chunk_data('reasoning', thinking_mode, reasoning=safe_reasoning, response_id=response_id)
             
             # 处理回复内容
             elif chunk_type == "response.output_text.delta":
                 delta = getattr(chunk, "delta", "")
                 if delta:
                     safe_content = safe_decode_response(delta)
-                    yield self._create_chunk_data('content', thinking_mode, content=safe_content)
+                    yield self._create_chunk_data('content', thinking_mode, content=safe_content, response_id=response_id)
         
         # 更新对话状态
         if response_id:
@@ -199,7 +213,8 @@ class DoubaoClient:
         thinking_mode: str,
         content: Optional[str] = None,
         reasoning: Optional[str] = None,
-        search_query: str = ""
+        search_query: str = "",
+        response_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """创建chunk数据字典"""
         return {
@@ -207,6 +222,7 @@ class DoubaoClient:
             'content': content,
             'reasoning': reasoning,
             'search_query': search_query,
-            'thinking_mode': thinking_mode
+            'thinking_mode': thinking_mode,
+            'response_id': response_id
         }
 

@@ -21,52 +21,99 @@ from src.ui import (
 )
 
 
-def parse_thinking_mode(user_input: str):
-    """解析深度思考控制符号
+def parse_command(user_input: str):
+    """统一解析用户命令
+    
+    支持的命令格式：
+        #think 消息内容          - 启用深度思考模式
+        #fast 消息内容           - 快速回复模式
+        #chat response_id 消息   - 从指定response_id继续对话
+        #clear                   - 清空对话历史（也支持 #新话题）
+        #exit                    - 退出程序（也支持 #退出, #quit）
+        其他内容                 - 普通聊天消息
     
     Args:
         user_input: 用户输入
     
     Returns:
-        tuple: (thinking_mode, actual_message, thinking_status)
+        dict: {
+            'type': 命令类型 ('chat'/'exit'/'clear'),
+            'message': 实际消息内容,
+            'thinking_mode': 思考模式 ('enabled'/'disabled'/默认值),
+            'thinking_status': 状态标记文本,
+            'response': 命令响应消息（如果有）,
+            'target_response_id': 目标response_id（如果有）
+        }
     """
-    thinking_mode = DEFAULT_THINKING_MODE
-    actual_message = user_input
-    thinking_status = ""
+    result = {
+        'type': 'chat',
+        'message': user_input,
+        'thinking_mode': DEFAULT_THINKING_MODE,
+        'thinking_status': '',
+        'response': None,
+        'target_response_id': None
+    }
     
-    if user_input.startswith("#think "):
-        thinking_mode = "enabled"
-        actual_message = user_input[7:]
-        thinking_status = " [要求深度思考]"
-    elif user_input.startswith("#fast "):
-        thinking_mode = "disabled"
-        actual_message = user_input[6:]
-        thinking_status = " [快速回复]"
+    # 不是命令，直接返回普通聊天
+    if not user_input.startswith('#'):
+        return result
     
-    return thinking_mode, actual_message, thinking_status
-
-
-def handle_user_command(user_input: str, client: DoubaoClient) -> bool:
-    """处理用户命令
+    # 解析命令和内容
+    parts = user_input[1:].split(' ', 1)  # 移除 # 并按第一个空格分割
+    command = parts[0].lower()
+    message = parts[1] if len(parts) > 1 else ''
     
-    Args:
-        user_input: 用户输入
-        client: 豆包客户端
+    # 退出命令
+    if command in ['exit', 'quit', '退出', '再见']:
+        result['type'] = 'exit'
+        result['response'] = f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！"
+        return result
     
-    Returns:
-        如果是退出命令返回True，否则返回False
-    """
-    # 检查退出命令
-    if user_input.lower() in ['exit', 'quit', '退出']:
-        colored_print(f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！", 'system_info')
-        return True
+    # 清空历史命令
+    if command in ['clear', 'new', '新话题']:
+        result['type'] = 'clear'
+        result['response'] = f"{SYMBOLS['success']} 对话历史已清空，我们可以开始新的聊天话题"
+        return result
     
-    # 清空对话历史
-    if user_input.lower() in ['clear', 'new', '新话题']:
-        client.clear_history()
-        colored_print(f"{SYMBOLS['success']} 对话历史已清空，我们可以开始新的聊天话题", 'system_success')
+    # 深度思考模式
+    if command == 'think':
+        result['type'] = 'chat'
+        result['message'] = message
+        result['thinking_mode'] = 'enabled'
+        result['thinking_status'] = ' [要求深度思考]'
+        return result
     
-    return False
+    # 快速回复模式
+    if command == 'fast':
+        result['type'] = 'chat'
+        result['message'] = message
+        result['thinking_mode'] = 'disabled'
+        result['thinking_status'] = ' [快速回复]'
+        return result
+    
+    # 从指定response_id继续对话
+    if command in ['chat', 'continue', 'c', '对话']:
+        # 解析格式：#chat response_id 消息内容（response_id可以是短id）
+        chat_parts = message.split(' ', 1)
+        if len(chat_parts) >= 1:
+            target_response_id = chat_parts[0].strip()
+            actual_message = chat_parts[1].strip() if len(chat_parts) > 1 else ''
+            
+            if target_response_id:
+                result['type'] = 'chat'
+                result['message'] = actual_message
+                result['target_response_id'] = target_response_id
+                result['thinking_status'] = f' [继续对话:{target_response_id}]'
+                return result
+        
+        # 格式错误，提示用户
+        result['type'] = 'error'
+        result['response'] = f"{SYMBOLS['warning']} 命令格式错误！正确格式：#chat 短id 消息内容"
+        return result
+    
+    # 未知命令，当作普通消息处理
+    result['message'] = user_input
+    return result
 
 
 def process_ai_response(
@@ -134,26 +181,54 @@ def chat_loop(client: DoubaoClient, input_handler: InputHandler) -> None:
             print(f"\033[1A\033[2K", end="")
             colored_print(f" 您{status}: {user_input}", 'user_text')
         
-        # 处理命令
-        if handle_user_command(user_input, client):
-            break
-        
         # 检查输入是否为空
-        if not user_input:
+        if not user_input.strip():
             colored_print(f"{SYMBOLS['warning']}  没有收到你的文字哦，请输入有效的消息", 'system_warning')
             continue
         
-        # 解析深度思考控制符号
-        thinking_mode, actual_message, thinking_status = parse_thinking_mode(user_input)
+        # 解析命令
+        cmd_result = parse_command(user_input)
         
-        # 如果只有控制符号，实际内容为空
-        if not actual_message.strip():
-            colored_print(f"{SYMBOLS['warning']}  请在控制符号后输入有效的消息", 'system_warning')
+        # 处理退出命令
+        if cmd_result['type'] == 'exit':
+            colored_print(cmd_result['response'], 'system_info')
+            break
+        
+        # 处理清空历史命令
+        if cmd_result['type'] == 'clear':
+            client.clear_history()
+            colored_print(cmd_result['response'], 'system_success')
             continue
         
-        # 处理AI响应
-        print()
-        process_ai_response(client, actual_message, thinking_mode, thinking_status)
+        # 处理错误命令
+        if cmd_result['type'] == 'error':
+            colored_print(cmd_result['response'], 'system_warning')
+            continue
+        
+        # 处理聊天消息
+        if cmd_result['type'] == 'chat':
+            # 检查消息内容是否为空
+            if not cmd_result['message'].strip():
+                colored_print(f"{SYMBOLS['warning']}  请在命令后输入有效的消息", 'system_warning')
+                continue
+            
+            # 如果指定了target_response_id，则切换对话上下文
+            if cmd_result['target_response_id']:
+                target_id = cmd_result['target_response_id']
+                client.set_response_id(target_id)
+                colored_print(
+                    f"{SYMBOLS['success']} 已切换到对话 [{target_id}] 继续聊天",
+                    'system_success'
+                )
+            
+            # 处理AI响应
+            print()
+            process_ai_response(
+                client,
+                cmd_result['message'],
+                cmd_result['thinking_mode'],
+                cmd_result['thinking_status']
+            )
 
 
 def main() -> None:
