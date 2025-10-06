@@ -73,6 +73,7 @@ def print_usage() -> None:
     colored_print("   - #new / #clear / #新话题 + 内容 --开始新的聊天", 'system_info')
     colored_print("   - #chat / #c / #对话 + 对话id + 内容 --从指定对话点继续（对话id在每次回复前显示）", 'system_info')
     colored_print("   - #history / #h / #历史 + 轮次  --显示最近N轮对话（默认10轮）", 'system_info')
+    #colored_print("   - #hdel / #delete / #删除 + 轮数  --删除最近N轮历史记录", 'system_info') #此命令不暴露给用户
     colored_print(f"{SYMBOLS['info']} 深度思考控制：", 'system_info')
     colored_print("   - 默认：自动判断是否需要深度思考", 'system_info')
     colored_print("   - #think + 内容：强制启用深度思考", 'system_info')

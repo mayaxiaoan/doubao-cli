@@ -254,6 +254,62 @@ class ChatHistory:
         """
         return self.current_turn
     
+    def delete_recent_turns(self, n: int) -> int:
+        """删除最近N轮历史记录
+        
+        Args:
+            n: 要删除的轮次数
+        
+        Returns:
+            实际删除的轮次数
+        """
+        if not os.path.exists(self.storage_file):
+            return 0
+        
+        try:
+            # 读取所有记录
+            records = []
+            with open(self.storage_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            records.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+            
+            # 计算要删除的记录数
+            total_records = len(records)
+            if n <= 0:
+                return 0
+            
+            # 如果要删除的数量大于等于总数，清空所有记录
+            if n >= total_records:
+                deleted_count = total_records
+                os.remove(self.storage_file)
+                self.current_turn = 0
+                return deleted_count
+            
+            # 只保留前面的记录（删除最后n条）
+            deleted_count = n
+            remaining_records = records[:-n]
+            
+            # 更新当前轮次编号
+            if remaining_records:
+                self.current_turn = remaining_records[-1].get('turn', 0)
+            else:
+                self.current_turn = 0
+            
+            # 重写文件
+            with open(self.storage_file, 'w', encoding='utf-8') as f:
+                for record in remaining_records:
+                    json.dump(record, f, ensure_ascii=False)
+                    f.write('\n')
+            
+            return deleted_count
+        except Exception as e:
+            print(f"删除历史记录失败: {e}")
+            return 0
+    
     def clear_all(self) -> None:
         """清空所有历史记录"""
         try:

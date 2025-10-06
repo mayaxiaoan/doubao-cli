@@ -42,7 +42,11 @@ DEFAULT_THINKING_MODE: str = 'auto'  # 可选: 'auto', 'enabled', 'disabled'
 # ============================================================================
 
 BATTERY_DISPLAY_ENABLED: bool = True  # 是否启用电池显示
-BATTERY_REFRESH_INTERVAL: int = 10  # 电池刷新间隔(秒)
+BATTERY_REFRESH_INTERVAL: int = 10  # 电池基础刷新间隔(秒)
+
+# 自适应刷新配置
+BATTERY_HIGH_LEVEL_THRESHOLD: int = 40  # 电量充足的阈值(%)，超过此值使用更长刷新间隔
+BATTERY_USER_IDLE_THRESHOLD: int = 60  # 用户空闲判定时间(秒)，超过此时间使用更长刷新间隔
 
 # ============================================================================
 # 历史记录配置

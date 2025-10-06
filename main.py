@@ -131,6 +131,29 @@ def parse_command(user_input: str):
             result['response'] = f"{SYMBOLS['warning']} 命令格式错误！正确格式：#history 数字（可选）"
             return result
     
+    # 删除历史记录命令
+    if command in ['hdel', 'delete', '删除']:
+        if not message.strip():
+            result['type'] = 'error'
+            result['response'] = f"{SYMBOLS['warning']} 请指定要删除的轮数！格式：#hdel 数字"
+            return result
+        
+        try:
+            # 获取要删除的轮数
+            num_turns = int(message.strip())
+            if num_turns <= 0:
+                result['type'] = 'error'
+                result['response'] = f"{SYMBOLS['warning']} 删除轮数必须大于0"
+                return result
+            
+            result['type'] = 'hdel'
+            result['delete_turns'] = num_turns
+            return result
+        except ValueError:
+            result['type'] = 'error'
+            result['response'] = f"{SYMBOLS['warning']} 命令格式错误！正确格式：#hdel 数字"
+            return result
+    
     # 未知命令，当作普通消息处理
     result['message'] = user_input
     return result
@@ -221,12 +244,13 @@ def process_ai_response(
         return None, None
 
 
-def chat_loop(client: DoubaoClient, input_handler: InputHandler) -> None:
+def chat_loop(client: DoubaoClient, input_handler: InputHandler, battery_monitor) -> None:
     """主聊天循环
     
     Args:
         client: 豆包客户端
         input_handler: 输入处理器
+        battery_monitor: 电池监控器
     """
     # 获取历史管理器
     history = get_chat_history(HISTORY_MAX_TURNS)
@@ -255,6 +279,9 @@ def chat_loop(client: DoubaoClient, input_handler: InputHandler) -> None:
             colored_print(f"{SYMBOLS['warning']}  没有收到你的文字哦，请输入有效的消息", 'system_warning')
             continue
         
+        # 记录用户活动时间（用于电池自适应刷新）
+        battery_monitor.update_user_activity()
+        
         # 解析命令
         cmd_result = parse_command(user_input)
         
@@ -280,6 +307,30 @@ def chat_loop(client: DoubaoClient, input_handler: InputHandler) -> None:
         # 处理历史记录查看命令
         if cmd_result['type'] == 'history':
             display_history(cmd_result.get('history_turns', 10))
+            continue
+        
+        # 处理删除历史记录命令
+        if cmd_result['type'] == 'hdel':
+            delete_turns = cmd_result.get('delete_turns', 0)
+            deleted_count = history.delete_recent_turns(delete_turns)
+            
+            if deleted_count > 0:
+                colored_print(
+                    f"{SYMBOLS['success']} 已成功删除最近 {deleted_count} 轮历史记录",
+                    'system_success'
+                )
+                # 如果删除了所有记录，清空客户端对话历史
+                if history.get_total_turns() == 0:
+                    client.clear_history()
+                    colored_print(
+                        f"{SYMBOLS['info']} 已清空所有历史记录和对话上下文",
+                        'system_info'
+                    )
+            else:
+                colored_print(
+                    f"{SYMBOLS['info']} 没有历史记录可删除",
+                    'system_info'
+                )
             continue
         
         # 处理错误命令
@@ -362,7 +413,7 @@ def main() -> None:
         input_handler = InputHandler()
         
         # 开始聊天循环
-        chat_loop(client, input_handler)
+        chat_loop(client, input_handler, battery_monitor)
         
     except ValueError as e:
         colored_print(f"{SYMBOLS['error']} 配置错误: {e}", 'system_error')
