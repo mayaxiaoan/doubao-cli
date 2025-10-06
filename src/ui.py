@@ -69,13 +69,14 @@ def print_usage() -> None:
     """打印使用说明"""
     colored_print(f"{SYMBOLS['info']} 输入消息开始聊天", 'system_info')
     colored_print(f"{SYMBOLS['info']} 命令格式（以 # 开头）：", 'system_info')
-    colored_print("   - #exit / #quit / #退出：关闭程序", 'system_info')
-    colored_print("   - #clear / #new / #新话题：开始新的聊天", 'system_info')
-    colored_print("   - #chat 短id 消息：从指定对话点继续（短id在每次回复前显示）", 'system_info')
+    #colored_print("   - #exit / #quit / #退出  --关闭程序", 'system_info') #此命令不暴露给用户
+    colored_print("   - #new / #clear / #新话题 + 内容 --开始新的聊天", 'system_info')
+    colored_print("   - #chat / #c / #对话 + 对话id + 内容 --从指定对话点继续（对话id在每次回复前显示）", 'system_info')
+    colored_print("   - #history / #h / #历史 + 轮次  --显示最近N轮对话（默认10轮）", 'system_info')
     colored_print(f"{SYMBOLS['info']} 深度思考控制：", 'system_info')
     colored_print("   - 默认：自动判断是否需要深度思考", 'system_info')
-    colored_print("   - #think 消息：强制启用深度思考", 'system_info')
-    colored_print("   - #fast 消息：禁用深度思考，快速回复", 'system_info')
+    colored_print("   - #think + 内容：强制启用深度思考", 'system_info')
+    colored_print("   - #fast + 内容：禁用深度思考，快速回复", 'system_info')
     colored_print(f"{SYMBOLS['separator']}" * 70, 'separator_line')
     print()
 
@@ -129,6 +130,8 @@ class StreamOutputHandler:
         self.first_chunk_received = False
         self.web_search_displayed = False
         self.response_id = None
+        self.short_id = None
+        self.bot_reply = []  # 保存AI回复内容（不含思考部分）
         self.id_mapper = get_id_mapper()  # 获取ID映射器
     
     def process_chunk(
@@ -218,19 +221,20 @@ class StreamOutputHandler:
             short_id = '◉◡◉'
             if self.response_id:
                 short_id = self.id_mapper.get_or_create_short_id(self.response_id)
+                self.short_id = short_id  # 保存短id
             
             if self.reasoning_displayed:
                 colored_print(f"\n{SYMBOLS['star']} {SYMBOLS['separator'] * 46} {SYMBOLS['star']}", 'separator_line')
                 if thinking_status != " [要求深度思考]":
                     # 显示带短id的前缀
-                    bot_prefix = f"({short_id}) 豆包{thinking_status}: "
+                    bot_prefix = f"(id:{short_id}) 豆包{thinking_status}: "
                     colored_print(bot_prefix, 'bot_text', end="", flush=True)
             elif not self.first_chunk_received:
                 stop_animation.set()
                 time.sleep(0.15)
                 # 清除等待动画留下的前缀，重新打印带短id的前缀
                 print('\r' + ' ' * 80, end='')
-                bot_prefix = f"({short_id}) 豆包{thinking_status}: "
+                bot_prefix = f"(id:{short_id}) 豆包{thinking_status}: "
                 if ENABLE_COLORS:
                     colored_prefix = f'{COLORS["bot_text"]}{bot_prefix}{COLORS["reset"]}'
                 else:
@@ -244,7 +248,17 @@ class StreamOutputHandler:
             time.sleep(0.15)
             self.first_chunk_received = True
         
-        colored_print(chunk_data['content'], 'bot_text', end="", flush=True)
+        content = chunk_data['content']
+        self.bot_reply.append(content)  # 保存回复内容
+        colored_print(content, 'bot_text', end="", flush=True)
+    
+    def get_short_id(self) -> str:
+        """获取短id"""
+        return self.short_id
+    
+    def get_bot_reply(self) -> str:
+        """获取完整的bot回复（不含思考部分）"""
+        return ''.join(self.bot_reply)
     
     def finalize(self, stop_animation: threading.Event) -> None:
         """完成输出处理"""

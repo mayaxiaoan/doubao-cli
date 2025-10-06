@@ -3,14 +3,11 @@
 ID映射模块
 
 将长response_id映射为短id（约3位），便于用户使用和记忆。
-支持持久化存储，程序重启后映射关系不丢失。
+映射关系从聊天历史中恢复，不单独存储。
 当达到上限时，自动循环使用旧的短id。
 """
 
-import json
-import os
 from typing import Optional, Dict
-from pathlib import Path
 
 
 class IDMapper:
@@ -18,69 +15,109 @@ class IDMapper:
     
     功能：
     - 将长response_id转换为短id（3位十六进制字符）
-    - 持久化保存映射关系
-    - 支持双向查询（短id->长id, 长id->短id）
+    - 从聊天历史恢复映射关系（内存存储）
+    - 支持短id查询长id（用于用户继续指定对话）
     - 达到上限后自动循环使用旧id
     - 使用混淆算法生成看似无规律的短id
+    - 基于API_KEY生成独特的混淆参数，不同用户的短id规则不同
+    
+    设计理念：
+    - 映射关系不单独持久化，启动时从chat_history.jsonl重建
+    - 只有历史中存在的对话才能继续，这是合理的限制
+    - 单一数据源，避免数据不一致
+    - 使用API_KEY作为种子，让每个用户的短id生成规则唯一
     """
     
     MAX_IDS = 4096  # 最大短id数量（0x000 - 0xfff，16^3=4096）
     
-    # 混淆密钥（用于XOR运算）
-    XOR_KEY = 0xA5C
-    
-    # 字符替换表（打乱十六进制字符顺序，让短id更难看出规律）
-    CHAR_MAP = str.maketrans('0123456789abcdef', '8d3a1fb95ce74062')
-    
-    def __init__(self, storage_file: str = "data/id_mapping.json"):
+    def __init__(self):
         """初始化ID映射器
         
-        Args:
-            storage_file: 映射数据存储文件路径
+        从config中读取API_KEY，生成唯一的混淆参数
         """
-        self.storage_file = storage_file
         self.short_to_long: Dict[str, str] = {}  # 短id -> 长id
-        self.long_to_short: Dict[str, str] = {}  # 长id -> 短id
         self.counter: int = 0  # 当前计数器
         
-        # 确保存储目录存在
-        self._ensure_storage_dir()
+        # 基于API_KEY生成混淆参数
+        self._init_obfuscation_params()
         
-        # 加载已有映射
-        self._load_mappings()
+        # 从历史记录恢复映射和计数器
+        self._restore_from_history()
     
-    def _ensure_storage_dir(self) -> None:
-        """确保存储目录存在"""
-        storage_path = Path(self.storage_file)
-        storage_path.parent.mkdir(parents=True, exist_ok=True)
+    def _init_obfuscation_params(self) -> None:
+        """基于API_KEY初始化混淆参数
+        
+        使用API_KEY的一部分直接生成：
+        1. XOR_KEY: 用于XOR运算的12位混淆密钥
+        2. CHAR_MAP: 字符替换表
+        
+        这样不同的API_KEY会产生不同的短id规则，提高安全性。
+        """
+        from ..config import ARK_API_KEY
+        
+        # 从API_KEY中提取字符，计算XOR_KEY (12位，范围0-4095)
+        # 取前3个字符的ASCII值相加，模4096
+        key_part = ARK_API_KEY[:3] if len(ARK_API_KEY) >= 3 else ARK_API_KEY
+        self.XOR_KEY = sum(ord(c) for c in key_part) % 4096
+        
+        # 生成CHAR_MAP：基于API_KEY的字符ASCII值来确定性地排列
+        # 取API_KEY的第4-19个字符(共16个)，用它们的ASCII值作为映射
+        hex_original = '0123456789abcdef'
+        
+        # 如果API_KEY足够长，用它来构造新的字符映射
+        if len(ARK_API_KEY) >= 19:
+            # 取第4-19个字符的ASCII值，对16取模，得到16个索引
+            indices = [ord(ARK_API_KEY[i]) % 16 for i in range(3, 19)]
+            # 根据索引重排hex字符
+            hex_shuffled = ''.join(hex_original[idx] for idx in indices)
+        else:
+            # API_KEY较短时，通过简单的位移重排
+            shift = sum(ord(c) for c in ARK_API_KEY) % 16
+            hex_shuffled = hex_original[shift:] + hex_original[:shift]
+        
+        self.CHAR_MAP = str.maketrans(hex_original, hex_shuffled)
     
-    def _load_mappings(self) -> None:
-        """从文件加载映射关系"""
-        if os.path.exists(self.storage_file):
-            try:
-                with open(self.storage_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.short_to_long = data.get('short_to_long', {})
-                    self.long_to_short = data.get('long_to_short', {})
-                    self.counter = data.get('counter', 0)
-            except Exception as e:
-                print(f"加载ID映射失败: {e}，将使用空映射")
-                self.short_to_long = {}
-                self.long_to_short = {}
-                self.counter = 0
-    
-    def _save_mappings(self) -> None:
-        """保存映射关系到文件"""
+    def _restore_from_history(self) -> None:
+        """从聊天历史恢复映射关系和计数器
+        
+        从chat_history.jsonl读取所有记录，重建内存映射
+        """
         try:
-            data = {
-                'short_to_long': self.short_to_long,
-                'long_to_short': self.long_to_short,
-                'counter': self.counter
-            }
-            with open(self.storage_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            # 延迟导入避免循环依赖
+            from .history import get_chat_history
+            
+            history = get_chat_history()
+            
+            # 获取所有历史记录（不限制数量，读取全部）
+            records = history.get_all_history()
+            
+            if not records:
+                self.counter = 0
+                return
+            
+            # 从历史记录重建映射
+            max_turn = 0
+            for record in records:
+                if record.get('type') == 'chat':
+                    short_id = record.get('short_id')
+                    response_id = record.get('response_id')
+                    turn = record.get('turn', 0)
+                    
+                    if short_id and response_id:
+                        self.short_to_long[short_id] = response_id
+                    
+                    # 跟踪最大轮次
+                    if turn > max_turn:
+                        max_turn = turn
+            
+            # 设置计数器为最大轮次（下一个id将从max_turn开始生成）
+            self.counter = max_turn
+        
         except Exception as e:
-            print(f"保存ID映射失败: {e}")
+            # 静默失败，使用空映射
+            print(f"从历史恢复映射失败: {e}，将从0开始")
+            self.short_to_long = {}
+            self.counter = 0
     
     def _number_to_short_id(self, num: int) -> str:
         """将数字转换为短id
@@ -121,11 +158,10 @@ class IDMapper:
         return reordered
     
     def get_or_create_short_id(self, long_id: str) -> str:
-        """获取或创建短id
+        """创建短id
         
-        如果长id已有对应的短id，直接返回；
-        否则创建新的短id并保存映射关系。
-        当达到上限时，循环使用旧的短id。
+        为新的response_id创建对应的短id。
+        当达到上限时，循环使用旧的短id（会覆盖旧映射）。
         
         Args:
             long_id: 长response_id
@@ -133,29 +169,16 @@ class IDMapper:
         Returns:
             对应的短id
         """
-        # 检查是否已存在映射
-        if long_id in self.long_to_short:
-            return self.long_to_short[long_id]
-        
         # 创建新的短id
         short_id = self._number_to_short_id(self.counter % self.MAX_IDS)
         
-        # 如果短id已被占用（循环使用），需要清理旧映射
-        if short_id in self.short_to_long:
-            old_long_id = self.short_to_long[short_id]
-            # 删除旧的反向映射
-            if old_long_id in self.long_to_short:
-                del self.long_to_short[old_long_id]
-        
-        # 保存新映射关系
+        # 保存映射关系（如果循环使用，会自动覆盖旧映射）
         self.short_to_long[short_id] = long_id
-        self.long_to_short[long_id] = short_id
         
         # 递增计数器
         self.counter += 1
         
-        # 持久化保存
-        self._save_mappings()
+        # 注意：不再持久化保存，映射关系由chat_history.jsonl管理
         
         return short_id
     
@@ -170,27 +193,15 @@ class IDMapper:
         """
         return self.short_to_long.get(short_id)
     
-    def get_short_id(self, long_id: str) -> Optional[str]:
-        """根据长id获取短id（不创建新映射）
-        
-        Args:
-            long_id: 长response_id
-        
-        Returns:
-            对应的短id，如果不存在返回None
-        """
-        return self.long_to_short.get(long_id)
-    
     def clear_all(self) -> None:
-        """清空所有映射关系"""
+        """清空所有映射关系（仅清空内存）"""
         self.short_to_long.clear()
-        self.long_to_short.clear()
         self.counter = 0
-        self._save_mappings()
     
     def get_mapping_count(self) -> int:
         """获取当前映射数量"""
         return len(self.short_to_long)
+    
 
 
 # 全局ID映射器实例

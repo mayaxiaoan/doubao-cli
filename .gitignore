@@ -51,5 +51,8 @@ htmlcov/
 .env
 .env.local
 
+# User data (chat history, ID mappings, etc.)
+data/
+
 # Legacy files (old version, for reference only)
 legacy/
