@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-豆包AI聊天程序主入口
+豆包 AI 聊天程序主入口
+
+这是一个基于火山引擎豆包 AI 的命令行聊天应用，提供：
+- 上下文对话管理
+- 深度思考模式
+- 联网搜索
+- 历史记录管理
+- 短 ID 快速切换对话
 
 使用方法：
     python main.py
@@ -8,155 +15,29 @@
 
 import sys
 import threading
+from typing import Optional, Tuple
 
+import src.config as config
 from src.client import DoubaoClient
-from src.config import SYMBOLS, COLORS, DEFAULT_THINKING_MODE, HISTORY_MAX_TURNS
-from src.utils import setup_encoding, get_battery_monitor, InputHandler, get_chat_history
+from src.command_handler import parse_command
+from src.config import COLORS, HISTORY_MAX_TURNS, SYMBOLS
+from src.key_manager import get_key_manager
 from src.ui import (
+    StreamOutputHandler,
     colored_print,
-    print_welcome,
     print_usage,
+    print_welcome,
     waiting_animation,
-    StreamOutputHandler
+)
+from src.utils import (
+    InputHandler,
+    get_battery_monitor,
+    get_chat_history,
+    get_id_mapper,
+    setup_encoding,
 )
 
 
-def parse_command(user_input: str):
-    """统一解析用户命令
-    """
-    result = {
-        'type': 'chat',
-        'message': user_input,
-        'thinking_mode': DEFAULT_THINKING_MODE,
-        'thinking_status': '',
-        'response': None,
-        'target_response_id': None
-    }
-    
-    # 不是命令，直接返回普通聊天
-    if not user_input.startswith('#'):
-        return result
-    
-    # 解析命令和内容
-    parts = user_input[1:].split(' ', 1)  # 移除 # 并按第一个空格分割
-    command = parts[0].lower()
-    message = parts[1] if len(parts) > 1 else ''
-    
-    # 退出命令
-    if command in ['exit', 'quit', '退出', '再见']:
-        result['type'] = 'exit'
-        result['response'] = f"{SYMBOLS['goodbye']} 感谢使用豆包AI聊天程序，再见！"
-        return result
-    
-    # 清空历史命令
-    if command in ['clear', 'new', '新话题']:
-        # 检查是否提供了新的聊天内容
-        if not message.strip():
-            result['type'] = 'error'
-            result['response'] = f"{SYMBOLS['warning']} 请在命令后输入新的聊天内容"
-            return result
-        
-        result['type'] = 'clear'
-        result['message'] = message
-        result['response'] = f"{SYMBOLS['success']} 对话历史已清空，我们可以开始新的聊天话题"
-        return result
-    
-    # 深度思考模式
-    if command == 'think':
-        if not message.strip():
-            result['type'] = 'error'
-            result['response'] = f"{SYMBOLS['warning']} 请在命令后输入有效的消息"
-            return result
-        
-        result['type'] = 'chat'
-        result['message'] = message
-        result['thinking_mode'] = 'enabled'
-        result['thinking_status'] = ' [要求深度思考]'
-        return result
-    
-    # 快速回复模式
-    if command == 'fast':
-        if not message.strip():
-            result['type'] = 'error'
-            result['response'] = f"{SYMBOLS['warning']} 请在命令后输入有效的消息"
-            return result
-        
-        result['type'] = 'chat'
-        result['message'] = message
-        result['thinking_mode'] = 'disabled'
-        result['thinking_status'] = ' [快速回复]'
-        return result
-    
-    # 从指定response_id继续对话
-    if command in ['chat', 'continue', 'c', '对话']:
-        # 解析格式：#chat 对话id 消息内容（对话id可以是短id）
-        chat_parts = message.split(' ', 1)
-        if len(chat_parts) >= 1:
-            target_response_id = chat_parts[0].strip()
-            actual_message = chat_parts[1].strip() if len(chat_parts) > 1 else ''
-            
-            # 检查对话id是否存在
-            if not target_response_id:
-                result['type'] = 'error'
-                result['response'] = f"{SYMBOLS['warning']} 命令格式错误！正确格式：#chat 对话id 消息内容"
-                return result
-            
-            # 检查消息内容是否存在
-            if not actual_message:
-                result['type'] = 'error'
-                result['response'] = f"{SYMBOLS['warning']} 请在对话id后输入有效的消息"
-                return result
-            
-            result['type'] = 'chat'
-            result['message'] = actual_message
-            result['target_response_id'] = target_response_id
-            result['thinking_status'] = f' [继续对话:{target_response_id}]'
-            return result
-        
-        # 格式错误，提示用户
-        result['type'] = 'error'
-        result['response'] = f"{SYMBOLS['warning']} 命令格式错误！正确格式：#chat 对话id 消息内容"
-        return result
-    
-    # 查看历史记录命令
-    if command in ['history', 'h', '历史']:
-        try:
-            # 默认显示10轮，用户可以指定数量
-            num_turns = int(message) if message.strip().isdigit() else 10
-            result['type'] = 'history'
-            result['history_turns'] = num_turns
-            return result
-        except ValueError:
-            result['type'] = 'error'
-            result['response'] = f"{SYMBOLS['warning']} 命令格式错误！正确格式：#history 数字（可选）"
-            return result
-    
-    # 删除历史记录命令
-    if command in ['hdel', 'delete', '删除']:
-        if not message.strip():
-            result['type'] = 'error'
-            result['response'] = f"{SYMBOLS['warning']} 请指定要删除的轮数！格式：#hdel 数字"
-            return result
-        
-        try:
-            # 获取要删除的轮数
-            num_turns = int(message.strip())
-            if num_turns <= 0:
-                result['type'] = 'error'
-                result['response'] = f"{SYMBOLS['warning']} 删除轮数必须大于0"
-                return result
-            
-            result['type'] = 'hdel'
-            result['delete_turns'] = num_turns
-            return result
-        except ValueError:
-            result['type'] = 'error'
-            result['response'] = f"{SYMBOLS['warning']} 命令格式错误！正确格式：#hdel 数字"
-            return result
-    
-    # 未知命令，当作普通消息处理
-    result['message'] = user_input
-    return result
 
 
 def display_history(num_turns: int) -> None:
@@ -203,17 +84,17 @@ def process_ai_response(
     message: str,
     thinking_mode: str,
     thinking_status: str
-) -> tuple:
-    """处理AI流式响应
+) -> Tuple[Optional[str], Optional[str]]:
+    """处理 AI 流式响应
     
     Args:
         client: 豆包客户端
         message: 用户消息
-        thinking_mode: 思考模式
-        thinking_status: 思考状态标记
+        thinking_mode: 思考模式（'auto', 'enabled', 'disabled'）
+        thinking_status: 思考状态标记文本
     
     Returns:
-        (short_id, bot_reply): 短id和AI回复内容（不含思考部分）
+        (short_id, bot_reply): 短 ID 和 AI 回复内容（不含思考部分）
     """
     # 启动等待动画
     stop_animation = threading.Event()
@@ -244,13 +125,19 @@ def process_ai_response(
         return None, None
 
 
-def chat_loop(client: DoubaoClient, input_handler: InputHandler, battery_monitor) -> None:
+def chat_loop(
+    client: DoubaoClient,
+    input_handler: InputHandler,
+    battery_monitor
+) -> None:
     """主聊天循环
     
+    处理用户输入、命令解析、AI 响应等主要逻辑。
+    
     Args:
-        client: 豆包客户端
-        input_handler: 输入处理器
-        battery_monitor: 电池监控器
+        client: 豆包客户端实例
+        input_handler: 输入处理器实例
+        battery_monitor: 电池监控器实例
     """
     # 获取历史管理器
     history = get_chat_history(HISTORY_MAX_TURNS)
@@ -345,7 +232,6 @@ def chat_loop(client: DoubaoClient, input_handler: InputHandler, battery_monitor
                 target_id = cmd_result['target_response_id']
                 
                 # 验证短id是否存在于历史记录中
-                from src.utils import get_id_mapper
                 id_mapper = get_id_mapper()
                 long_id = id_mapper.get_long_id(target_id)
                 
@@ -378,7 +264,6 @@ def chat_loop(client: DoubaoClient, input_handler: InputHandler, battery_monitor
             # 保存聊天记录到历史
             if short_id and bot_reply:
                 # 获取长response_id
-                from src.utils import get_id_mapper
                 id_mapper = get_id_mapper()
                 long_id = id_mapper.get_long_id(short_id)
                 
@@ -389,40 +274,115 @@ def chat_loop(client: DoubaoClient, input_handler: InputHandler, battery_monitor
                         user_message=cmd_result['message'],
                         bot_reply=bot_reply
                     )
+            elif not short_id or not bot_reply:
+                # AI 响应失败的情况
+                colored_print(
+                    f"{SYMBOLS['error']} AI 响应失败，请重试",
+                    'system_error'
+                )
+
+
+def initialize_api_keys() -> bool:
+    """初始化 API 密钥
+    
+    检查并加载 API 密钥，如果不存在则引导用户输入。
+    
+    Returns:
+        初始化成功返回 True，失败返回 False
+    """
+    key_manager = get_key_manager()
+    
+    # 检查密钥文件是否存在
+    if not key_manager.key_file_exists():
+        # 首次运行，提示用户输入密钥
+        if not key_manager.prompt_for_keys():
+            return False
+    else:
+        # 加载现有密钥
+        if not key_manager.load_keys():
+            colored_print(
+                f"{SYMBOLS['error']} 读取密钥文件失败！",
+                'system_error'
+            )
+            colored_print(
+                f"{SYMBOLS['info']} 请检查 {key_manager.key_file} 文件格式是否正确",
+                'system_info'
+            )
+            return False
+    
+    # 验证密钥
+    if not key_manager.validate_keys():
+        colored_print(
+            f"{SYMBOLS['error']} API 密钥格式不正确！",
+            'system_error'
+        )
+        colored_print(
+            f"{SYMBOLS['info']} 请检查 {key_manager.key_file} 文件中的密钥",
+            'system_info'
+        )
+        return False
+    
+    # 将密钥设置到配置中
+    api_key, endpoint_id = key_manager.get_keys()
+    if api_key and endpoint_id:
+        config.ARK_API_KEY = api_key
+        config.ARK_ENDPOINT_ID = endpoint_id
+    else:
+        return False
+    
+    return True
 
 
 def main() -> None:
-    """主函数"""
-    # 设置编码
+    """主函数 - 程序入口
+    
+    初始化所有组件并启动主聊天循环。
+    """
+    # 设置终端编码
     setup_encoding()
     
-    # 初始化电池监控
+    # 初始化 API 密钥
+    if not initialize_api_keys():
+        print("\n程序无法启动，请配置正确的 API 密钥后重试。")
+        return
+    
+    # 初始化电池监控（仅 Linux TTY 模式有效）
     battery_monitor = get_battery_monitor()
     battery_monitor.start_display()
     
-    # 显示欢迎界面
+    # 显示欢迎界面和使用说明
     print_welcome()
     print_usage()
     
     try:
-        # 初始化豆包客户端
+        # 初始化豆包 AI 客户端
         client = DoubaoClient()
-        colored_print(f"{SYMBOLS['success']} 豆包AI客户端初始化成功", 'system_success')
+        colored_print(
+            f"{SYMBOLS['success']} 豆包 AI 客户端初始化成功",
+            'system_success'
+        )
         
         # 初始化输入处理器
         input_handler = InputHandler()
         
-        # 开始聊天循环
+        # 进入主聊天循环
         chat_loop(client, input_handler, battery_monitor)
         
     except ValueError as e:
         colored_print(f"{SYMBOLS['error']} 配置错误: {e}", 'system_error')
-        colored_print(f"{SYMBOLS['docs']} 请检查 src/config.py 文件，确保已正确填写API密钥信息", 'system_info')
+        colored_print(
+            f"{SYMBOLS['docs']} 请检查 api_keys.ini 中的密钥是否正确",
+            'system_info'
+        )
     except KeyboardInterrupt:
-        colored_print(f"\n\n{SYMBOLS['goodbye']} 程序被用户中断，再见！", 'system_info')
+        colored_print(
+            f"\n\n{SYMBOLS['goodbye']} 程序被用户中断，再见！",
+            'system_info'
+        )
     except Exception as e:
         colored_print(f"{SYMBOLS['error']} 程序运行异常: {e}", 'system_error')
     finally:
+        # 清理电池监控显示
         battery_monitor.stop_display()
         battery_monitor.clear_display()
 

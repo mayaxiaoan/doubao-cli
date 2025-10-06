@@ -2,26 +2,30 @@
 """
 聊天历史记录模块
 
-使用JSONL格式保存聊天历史，支持增量写入和高效读取。
+使用 JSONL 格式保存聊天历史，提供：
+- 增量写入和高效读取
+- 自动维护最大记录数
+- 历史查询和删除功能
+- 短 ID 计数器恢复
 """
 
 import json
 import os
+from collections import deque
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Any
-from collections import deque
+from typing import Any, Dict, List, Optional
 
 
 class ChatHistory:
     """聊天历史管理器
     
     功能：
-    - 保存聊天对话记录（用户消息、AI回复、短id、response_id）
-    - 保存命令记录（#clear、#new等）
+    - 保存聊天对话记录（用户消息、AI 回复、短 ID、response_id）
+    - 保存命令记录（#clear、#new 等）
     - 自动维护最大记录数（超出后删除旧记录）
-    - 支持查询最近N轮对话
-    - 从历史中恢复短id计数器
+    - 支持查询最近 N 轮对话
+    - 从历史中恢复短 ID 计数器
     """
     
     def __init__(

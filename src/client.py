@@ -1,23 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-豆包AI客户端模块
+豆包 AI 客户端模块
 
-基于火山引擎官方SDK实现的流式聊天客户端。
+基于火山引擎官方 SDK 实现的流式聊天客户端，提供：
+- 上下文对话管理
+- 深度思考模式
+- 联网搜索
+- 流式输出
 """
 
-from typing import Optional, Iterator, Dict, Any
+from typing import Any, Dict, Iterator, Optional
+
 from volcenginesdkarkruntime import Ark
 
-from .config import (
-    ARK_API_KEY,
-    ARK_ENDPOINT_ID,
-    API_BASE_URL,
-    MAX_TOKENS,
-    TEMPERATURE,
-    TOP_P,
-    GLOBAL_SYSTEM_PROMPT,
-    WEB_SEARCH_CONFIG
-)
+from . import config
 from .utils.id_mapper import get_id_mapper
 
 
@@ -38,13 +34,9 @@ def safe_decode_response(content: Any) -> Optional[str]:
 
 
 class DoubaoClient:
-    """豆包AI聊天客户端
+    """豆包 AI 聊天客户端
     
-    基于火山引擎Responses API实现，支持：
-    - 上下文对话管理
-    - 深度思考模式
-    - 联网搜索
-    - 流式输出
+    基于火山引擎 Responses API 实现。
     """
     
     def __init__(self):
@@ -56,23 +48,29 @@ class DoubaoClient:
     
     def _validate_config(self) -> None:
         """验证配置有效性"""
-        if not ARK_API_KEY or ARK_API_KEY == "your_api_key_here":
-            raise ValueError("请在config.py中设置有效的API_KEY")
-        if not ARK_ENDPOINT_ID or ARK_ENDPOINT_ID == "your_endpoint_id_here":
-            raise ValueError("请在config.py中设置有效的ENDPOINT_ID")
+        if not config.ARK_API_KEY:
+            raise ValueError(
+                "请设置 ARK_API_KEY 环境变量或在 config.py 中配置 API 密钥"
+            )
+        if not config.ARK_ENDPOINT_ID:
+            raise ValueError(
+                "请设置 ARK_ENDPOINT_ID 环境变量或在 config.py 中配置端点 ID"
+            )
     
     def _init_client(self) -> None:
-        """初始化Ark客户端"""
+        """初始化 Ark 客户端"""
         try:
-            self.client = Ark(base_url=API_BASE_URL, api_key=ARK_API_KEY)
+            self.client = Ark(base_url=config.API_BASE_URL, api_key=config.ARK_API_KEY)
         except Exception as e:
-            raise ValueError(f"初始化Ark客户端失败: {e}")
+            raise ValueError(f"初始化 Ark 客户端失败: {e}")
     
     def _init_conversation_state(self) -> None:
         """初始化对话状态"""
         self.previous_response_id: Optional[str] = None
         self.conversation_count: int = 0
-        self.system_prompt: str = GLOBAL_SYSTEM_PROMPT or "你是豆包，是由字节跳动开发的 AI 人工智能助手。"
+        self.system_prompt: str = (
+            config.GLOBAL_SYSTEM_PROMPT or "你是豆包，是由字节跳动开发的 AI 人工智能助手。"
+        )
     
     def clear_history(self) -> None:
         """清空对话历史"""
@@ -149,13 +147,13 @@ class DoubaoClient:
     ) -> dict:
         """构建API请求参数"""
         return {
-            "model": ARK_ENDPOINT_ID,
+            "model": config.ARK_ENDPOINT_ID,
             "input": input_messages,
             "previous_response_id": self.previous_response_id,
-            "max_output_tokens": MAX_TOKENS,
-            "temperature": TEMPERATURE,
-            "top_p": TOP_P,
-            "tools": [WEB_SEARCH_CONFIG],
+            "max_output_tokens": config.MAX_TOKENS,
+            "temperature": config.TEMPERATURE,
+            "top_p": config.TOP_P,
+            "tools": [config.WEB_SEARCH_CONFIG],
             "stream": True,
             "store": True,
             "thinking": {"type": thinking_mode}

@@ -2,15 +2,17 @@
 """
 编码处理工具模块
 
-提供终端编码设置和相关工具函数。
+提供终端编码设置和相关工具函数，包括：
+- UTF-8 编码配置
+- 字节数据安全解码
 """
 
-import sys
 import os
+import sys
 
 
 def setup_encoding() -> bool:
-    """设置终端编码为UTF-8
+    """设置终端编码为 UTF-8
     
     Returns:
         设置是否成功

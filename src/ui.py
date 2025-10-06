@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-UI模块
+UI 模块
 
-提供终端界面显示相关功能。
+提供终端界面显示相关功能，包括：
+- 彩色文本输出
+- 欢迎界面和使用说明
+- 流式输出处理
+- 等待动画
 """
 
 import threading
 import time
 from typing import Callable
 
-from .config import SYMBOLS, COLORS, ENABLE_COLORS
+from .config import COLORS, ENABLE_COLORS, SYMBOLS
 from .utils.id_mapper import get_id_mapper
 
 
@@ -122,7 +126,11 @@ def waiting_animation(stop_event: threading.Event) -> None:
 class StreamOutputHandler:
     """流式输出处理器
     
-    管理AI回复的流式输出显示。
+    管理 AI 回复的流式输出显示，包括：
+    - 深度思考内容显示
+    - 普通回复内容显示
+    - Web 搜索状态显示
+    - 短 ID 管理
     """
     
     def __init__(self):

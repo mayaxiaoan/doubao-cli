@@ -1,44 +1,46 @@
 # -*- coding: utf-8 -*-
 """
-ID映射模块
+ID 映射模块
 
-将长response_id映射为短id（约3位），便于用户使用和记忆。
-映射关系从聊天历史中恢复，不单独存储。
-当达到上限时，自动循环使用旧的短id。
+将长 response_id 映射为短 ID（3 位），提供：
+- 短 ID 生成（基于混淆算法）
+- ID 映射管理（从历史记录恢复）
+- 循环复用机制（达到上限后自动循环）
+- 基于 API_KEY 的个性化短 ID 规则
 """
 
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 
 class IDMapper:
-    """ID映射器
+    """ID 映射器
     
     功能：
-    - 将长response_id转换为短id（3位十六进制字符）
+    - 将长 response_id 转换为短 ID（3 位十六进制字符）
     - 从聊天历史恢复映射关系（内存存储）
-    - 支持短id查询长id（用于用户继续指定对话）
-    - 达到上限后自动循环使用旧id
-    - 使用混淆算法生成看似无规律的短id
-    - 基于API_KEY生成独特的混淆参数，不同用户的短id规则不同
+    - 支持短 ID 查询长 ID（用于用户继续指定对话）
+    - 达到上限后自动循环使用旧 ID
+    - 使用混淆算法生成看似无规律的短 ID
+    - 基于 API_KEY 生成独特的混淆参数，不同用户的短 ID 规则不同
     
     设计理念：
-    - 映射关系不单独持久化，启动时从chat_history.jsonl重建
+    - 映射关系不单独持久化，启动时从 chat_history.jsonl 重建
     - 只有历史中存在的对话才能继续，这是合理的限制
     - 单一数据源，避免数据不一致
-    - 使用API_KEY作为种子，让每个用户的短id生成规则唯一
+    - 使用 API_KEY 作为种子，让每个用户的短 ID 生成规则唯一
     """
     
-    MAX_IDS = 4096  # 最大短id数量（0x000 - 0xfff，16^3=4096）
+    MAX_IDS = 4096  # 最大短 ID 数量（0x000 - 0xfff，16^3=4096）
     
     def __init__(self):
-        """初始化ID映射器
+        """初始化 ID 映射器
         
-        从config中读取API_KEY，生成唯一的混淆参数
+        从 config 中读取 API_KEY，生成唯一的混淆参数。
         """
-        self.short_to_long: Dict[str, str] = {}  # 短id -> 长id
+        self.short_to_long: Dict[str, str] = {}  # 短 ID -> 长 ID
         self.counter: int = 0  # 当前计数器
         
-        # 基于API_KEY生成混淆参数
+        # 基于 API_KEY 生成混淆参数
         self._init_obfuscation_params()
         
         # 从历史记录恢复映射和计数器

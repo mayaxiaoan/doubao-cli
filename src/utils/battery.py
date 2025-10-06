@@ -2,27 +2,30 @@
 """
 电池监控模块
 
-用于在Linux TTY模式下显示电池电量信息。
+用于在 Linux TTY 模式下显示电池电量信息，提供：
+- 实时电量监控
+- 自适应刷新间隔（根据电量和用户活动状态调整）
+- TTY 终端显示
 """
 
 import os
+import platform
 import threading
 import time
-import platform
 from typing import Optional
 
 from ..config import (
-    BATTERY_DISPLAY_ENABLED, 
-    BATTERY_REFRESH_INTERVAL,
+    BATTERY_DISPLAY_ENABLED,
     BATTERY_HIGH_LEVEL_THRESHOLD,
-    BATTERY_USER_IDLE_THRESHOLD
+    BATTERY_REFRESH_INTERVAL,
+    BATTERY_USER_IDLE_THRESHOLD,
 )
 
 
 class BatteryMonitor:
     """电池电量监控器
     
-    在Linux系统的TTY终端上显示电池电量信息。
+    在 Linux 系统的 TTY 终端上显示电池电量信息。
     支持自适应刷新间隔以节省能耗。
     """
     
@@ -237,7 +240,7 @@ class BatteryMonitor:
 
 
 class DummyBatteryMonitor:
-    """Windows下的空操作电池监控器"""
+    """Windows 下的空操作电池监控器"""
     
     def start_display(self) -> None:
         pass

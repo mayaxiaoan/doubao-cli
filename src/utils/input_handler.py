@@ -2,21 +2,24 @@
 """
 输入处理模块
 
-处理用户输入，支持编码错误自动修复。
+处理用户输入，提供：
+- 安全的用户输入获取
+- 编码错误自动修复
+- 跨平台支持（Linux/Windows）
 """
 
-import sys
 import platform
+import sys
 from typing import Callable, Dict, Optional
 
-# Windows下禁用UTF8修复功能
+# Windows 下禁用 UTF-8 修复功能
 _IS_WINDOWS = platform.system() == 'Windows'
 
-# 只在非Windows系统导入termios和tty
+# 只在非 Windows 系统导入 termios 和 tty
 if not _IS_WINDOWS:
     try:
-        import tty
         import termios
+        import tty
     except ImportError:
         _IS_WINDOWS = True
 
@@ -24,7 +27,10 @@ if not _IS_WINDOWS:
 class InputHandler:
     """输入处理器
     
-    提供安全的用户输入功能，支持编码错误自动修复。
+    提供安全的用户输入功能，支持：
+    - 编码错误自动修复
+    - UTF-8 字符删除提示
+    - 跨平台兼容
     """
     
     def __init__(self):
@@ -69,7 +75,7 @@ class InputHandler:
     
     @staticmethod
     def _get_input_windows() -> str:
-        """Windows下的输入处理"""
+        """Windows 下的输入处理"""
         try:
             user_input = input()
             return user_input.strip()
@@ -84,7 +90,7 @@ class InputHandler:
         colors: Dict[str, str],
         enable_colors: bool
     ) -> str:
-        """Linux下的输入处理（支持UTF8修复）"""
+        """Linux 下的输入处理（支持 UTF-8 修复）"""
         try:
             # 尝试从stdin.buffer读取原始字节
             if hasattr(sys.stdin, 'buffer'):
