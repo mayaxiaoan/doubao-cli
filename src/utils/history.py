@@ -102,8 +102,13 @@ class ChatHistory:
             'bot_reply': bot_reply
         }
         
+        # 立即写入（不延迟，避免意外关机丢失数据）
         self._append_record(record)
-        self._trim_history()
+        
+        # 优化：只有超过阈值较多时才修剪（减少IO次数）
+        # 只在记录数超过 max_turns + 20 时才触发修剪
+        if self.current_turn % 20 == 0:  # 每20轮检查一次
+            self._trim_history()
     
     def save_command(self, command: str, message: str) -> None:
         """保存命令记录（如#clear、#new等）
@@ -122,8 +127,12 @@ class ChatHistory:
             'message': message
         }
         
+        # 立即写入（不延迟，避免意外关机丢失数据）
         self._append_record(record)
-        self._trim_history()
+        
+        # 命令记录较少，不频繁触发修剪
+        if self.current_turn % 20 == 0:
+            self._trim_history()
     
     def _append_record(self, record: Dict[str, Any]) -> None:
         """追加一条记录到文件
