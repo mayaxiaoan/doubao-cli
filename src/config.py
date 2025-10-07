@@ -16,7 +16,7 @@ from typing import Dict
 # API 配置
 # ============================================================================
 
-# API 密钥（由 key_manager 从 api_keys.ini 动态加载）
+# API 密钥（考虑到安全性，不要在此处直接填入，会由 key_manager 从 api_keys.ini 动态加载）
 ARK_API_KEY: str = ""
 ARK_ENDPOINT_ID: str = ""
 

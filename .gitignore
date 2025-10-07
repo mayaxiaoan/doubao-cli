@@ -51,6 +51,9 @@ htmlcov/
 .env
 .env.local
 
+# API Keys (sensitive information)
+api_keys.ini
+
 # User data (chat history, ID mappings, etc.)
 data/
 
